@@ -14,6 +14,8 @@ Most rate limiters count requests. LLM APIs burn **tokens**. valve meters both.
 | Progress | [engineering.md](./engineering.md) |
 | HTTP API | [docs/HTTP_API.md](./docs/HTTP_API.md) |
 | Benchmarks | [docs/BENCHMARKS.md](./docs/BENCHMARKS.md) |
+| Sticky routing | [docs/STICKY_ROUTING.md](./docs/STICKY_ROUTING.md) |
+| Grafana | [deploy/grafana/](./deploy/grafana/) |
 | Contributing | [CONTRIBUTING.md](./CONTRIBUTING.md) |
 | Code of Conduct | [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) |
 | Security | [SECURITY.md](./SECURITY.md) |
@@ -47,7 +49,7 @@ Most rate limiters count requests. LLM APIs burn **tokens**. valve meters both.
 ## Install
 
 ```bash
-go get github.com/shiv-eshwar/valve@v0.1.0
+go get github.com/shiv-eshwar/valve@v0.1.1
 ```
 
 Requires Go 1.24+.
@@ -138,6 +140,15 @@ Defaults: RPM chunk `5`, TPM chunk `500`, lease TTL `2s`.
 ```bash
 cd examples/openai-proxy && go run .
 ```
+
+## Adopter kits
+
+| Kit | Path |
+| --- | --- |
+| Python HTTP client | [`examples/python-client/`](./examples/python-client/) |
+| Gin + `httpmw` demo | [`examples/gin-ratelimit/`](./examples/gin-ratelimit/) |
+| Grafana dashboard | [`deploy/grafana/valve-dashboard.json`](./deploy/grafana/valve-dashboard.json) |
+| Sticky routing notes | [`docs/STICKY_ROUTING.md`](./docs/STICKY_ROUTING.md) |
 
 ## Develop
 

@@ -11,10 +11,10 @@ Update this file whenever work lands. Do not delete remaining work — refine it
 
 | Field | Value |
 | --- | --- |
-| Phase | **5 — OSS polish (complete)** |
-| Status | **Published** `v0.1.0` — community docs, issue/PR templates, Code of Conduct, GitHub Release |
+| Phase | **6 — Adopter kits (complete)** |
+| Status | Python client, Gin example, Grafana dashboard, sticky-routing docs; local tag `v0.1.1` |
 | Last updated | 2026-08-01 |
-| Next up | Community feedback; patch releases as needed (`v0.1.x`) |
+| Next up | Optional: Echo wrapper, vLLM example, ITPM/OTPM; push `git push origin v0.1.1` when ready |
 
 ---
 
@@ -190,6 +190,22 @@ Pulled from `WHAT_THIS_IS.md`:
 
 ---
 
+### Phase 6 — Adopter kits
+
+**Goal:** Non-Go and ops adopters can plug in without reading chat history.
+
+**Estimate:** ~1 week
+
+- [x] Python stdlib HTTP client (`examples/python-client`)
+- [x] Gin + `httpmw` demo with separate `go.mod` (`examples/gin-ratelimit`)
+- [x] Grafana dashboard JSON (`deploy/grafana/valve-dashboard.json`)
+- [x] Sticky-routing notes (`docs/STICKY_ROUTING.md`)
+- [x] README / CONTRIBUTING / CHANGELOG updates; tag `v0.1.1`
+
+**Exit criteria:** Polyglot check/settle path documented; Gin builds without Gin in root `go.mod`; dashboard importable.
+
+---
+
 ## Suggested repo layout (Phase 1+)
 
 ```text
@@ -238,6 +254,7 @@ engineering.md
 | 2026-08-01 | ObservedLimiter wrapper | Keep core limiter pure; metrics opt-in |
 | 2026-08-01 | MIT confirmed for v0.1.0 | Already in LICENSE; OSS default for library + sidecar |
 | 2026-08-01 | v0.1.0 scope = Phases 1–4 + polish | Dual-bucket, fast path, LLM helpers, valved, docs; no Envoy/Helm/CRDT |
+| 2026-08-01 | Phase 6 = adopter kits before Envoy/ITPM | Raise adoption without core API break; Gin stays in examples/ only |
 
 ---
 
@@ -264,6 +281,7 @@ engineering.md
 | 3 | LLM ergonomics | **Done** (2026-08-01) |
 | 4 | Ops / integration | **Done** (2026-08-01) |
 | 5 | OSS polish | **Done** (2026-08-01) |
+| 6 | Adopter kits | **Done** (2026-08-01) |
 
 ---
 

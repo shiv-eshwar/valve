@@ -31,3 +31,7 @@ BenchmarkValveFastPath-10       	   40897	    120096 ns/op	     357 B/op	       
 ```
 
 Re-run on your hardware before citing numbers. Redis/Lua Check targets are in the README SLOs (same-AZ p99), not these CPU benches.
+
+## Ops dashboards
+
+Import [`deploy/grafana/valve-dashboard.json`](../deploy/grafana/valve-dashboard.json) for live `valve_*` Prometheus panels (checks, latency, lease hit ratio, overshoot, store errors).
