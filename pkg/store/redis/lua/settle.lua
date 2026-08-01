@@ -14,9 +14,13 @@ end
 
 local fields = redis.call('HMGET', res_key,
   'status', 'subject', 'model', 'rpm_cost', 'tpm_reserved', 'limit_rpm', 'limit_tpm',
-  'snap_allowed', 'snap_remaining_rpm', 'snap_remaining_tpm', 'snap_overshoot')
+  'snap_allowed', 'snap_remaining_rpm', 'snap_remaining_tpm', 'snap_overshoot', 'mode')
 
 local status = fields[1]
+local mode = fields[12]
+if mode == 'split' then
+  return redis.error_reply('wrong settle mode for reservation')
+end
 if status == 'settled' then
   return {
     1,

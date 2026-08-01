@@ -65,6 +65,9 @@ func (l *Limiter) Pool() *lease.Pool { return l.pool }
 
 // Check implements api.Limiter.
 func (l *Limiter) Check(ctx context.Context, key api.Key, limits api.Limits, cost api.Cost) (api.Decision, error) {
+	if err := limits.Validate(); err != nil {
+		return api.Decision{}, err
+	}
 	if l.pool != nil {
 		return l.checkFast(ctx, key, limits, cost)
 	}
@@ -90,17 +93,15 @@ func (l *Limiter) checkFast(ctx context.Context, key api.Key, limits api.Limits,
 	if cost.Tokens < 0 {
 		cost.Tokens = 0
 	}
+	if cost.InputTokens < 0 {
+		cost.InputTokens = 0
+	}
+	if cost.OutputTokens < 0 {
+		cost.OutputTokens = 0
+	}
 
 	if lt, retry, ok := l.pool.Deny().Get(key); ok {
-		return api.Decision{
-			Allowed:      false,
-			LimitType:    lt,
-			RetryAfter:   retry,
-			LimitRPM:     limits.RequestsPerMinute,
-			LimitTPM:     limits.TokensPerMinute,
-			RemainingRPM: 0,
-			RemainingTPM: 0,
-		}, nil
+		return denyDecision(limits, lt, retry), nil
 	}
 
 	id, err := l.newID()
@@ -114,102 +115,131 @@ func (l *Limiter) checkFast(ctx context.Context, key api.Key, limits api.Limits,
 
 	cfg := l.pool.Config()
 	l.pool.NoteBorrow()
-	br, err := l.store.Borrow(ctx, key, limits, cost.Requests, cost.Tokens, cfg.RPMChunk, cfg.TPMChunk)
+	spec := store.BorrowSpec{
+		MinRPM:    cost.Requests,
+		ChunkRPM:  cfg.RPMChunk,
+		MinTPM:    cost.Tokens,
+		ChunkTPM:  cfg.TPMChunk,
+		MinITPM:   cost.InputTokens,
+		ChunkITPM: cfg.ITPMChunk,
+		MinOTPM:   cost.OutputTokens,
+		ChunkOTPM: cfg.OTPMChunk,
+	}
+	br, err := l.store.Borrow(ctx, key, limits, spec)
 	if err != nil {
 		return l.onStoreErrFast(key, limits, cost, err)
 	}
 	if !br.Allowed {
 		l.pool.Deny().Set(key, br.LimitType, br.RetryAfter)
-		return api.Decision{
-			Allowed:      false,
-			LimitType:    br.LimitType,
-			RemainingRPM: br.RemainingRPM,
-			RemainingTPM: br.RemainingTPM,
-			LimitRPM:     limits.RequestsPerMinute,
-			LimitTPM:     limits.TokensPerMinute,
-			RetryAfter:   br.RetryAfter,
-		}, nil
+		return borrowDenyDecision(limits, br), nil
 	}
 
-	l.pool.CreditLease(key, limits, br.GotRPM, br.GotTPM)
+	l.pool.CreditLease(key, limits, br.GotRPM, br.GotTPM, br.GotITPM, br.GotOTPM)
 	d, ok := l.pool.TryDebit(key, limits, cost, id)
 	if !ok {
-		// Should not happen after successful borrow of at least cost.
 		l.pool.Deny().Set(key, api.LimitTypeBackend, time.Second)
-		return api.Decision{
-			Allowed:    false,
-			LimitType:  api.LimitTypeBackend,
-			LimitRPM:   limits.RequestsPerMinute,
-			LimitTPM:   limits.TokensPerMinute,
-			RetryAfter: time.Second,
-		}, nil
+		return denyDecision(limits, api.LimitTypeBackend, time.Second), nil
 	}
 	return d, nil
 }
 
-func (l *Limiter) onStoreErr(limits api.Limits, err error) (api.Decision, error) {
+func denyDecision(limits api.Limits, lt api.LimitType, retry time.Duration) api.Decision {
+	d := api.Decision{
+		Allowed:    false,
+		LimitType:  lt,
+		RetryAfter: retry,
+		LimitRPM:   limits.RequestsPerMinute,
+	}
+	if limits.Split() {
+		d.LimitITPM = limits.InputTokensPerMinute
+		d.LimitOTPM = limits.OutputTokensPerMinute
+		d.LimitTPM = limits.OutputTokensPerMinute
+	} else {
+		d.LimitTPM = limits.TokensPerMinute
+	}
+	return d
+}
+
+func borrowDenyDecision(limits api.Limits, br store.BorrowResult) api.Decision {
+	d := api.Decision{
+		Allowed:       false,
+		LimitType:     br.LimitType,
+		RemainingRPM:  br.RemainingRPM,
+		RemainingTPM:  br.RemainingTPM,
+		RemainingITPM: br.RemainingITPM,
+		RemainingOTPM: br.RemainingOTPM,
+		LimitRPM:      limits.RequestsPerMinute,
+		RetryAfter:    br.RetryAfter,
+	}
+	if limits.Split() {
+		d.LimitITPM = limits.InputTokensPerMinute
+		d.LimitOTPM = limits.OutputTokensPerMinute
+		d.LimitTPM = limits.OutputTokensPerMinute
+		d.RemainingTPM = br.RemainingOTPM
+	} else {
+		d.LimitTPM = limits.TokensPerMinute
+	}
+	return d
+}
+
+func (l *Limiter) onStoreErr(limits api.Limits, _ error) (api.Decision, error) {
 	switch l.failMode {
 	case api.FailOpen:
-		return api.Decision{
+		d := api.Decision{
 			Allowed:      true,
 			LimitType:    api.LimitTypeNone,
 			RemainingRPM: limits.RequestsPerMinute,
-			RemainingTPM: limits.TokensPerMinute,
 			LimitRPM:     limits.RequestsPerMinute,
-			LimitTPM:     limits.TokensPerMinute,
-		}, nil
+		}
+		if limits.Split() {
+			d.RemainingITPM = limits.InputTokensPerMinute
+			d.RemainingOTPM = limits.OutputTokensPerMinute
+			d.RemainingTPM = limits.OutputTokensPerMinute
+			d.LimitITPM = limits.InputTokensPerMinute
+			d.LimitOTPM = limits.OutputTokensPerMinute
+			d.LimitTPM = limits.OutputTokensPerMinute
+		} else {
+			d.RemainingTPM = limits.TokensPerMinute
+			d.LimitTPM = limits.TokensPerMinute
+		}
+		return d, nil
 	default:
-		return api.Decision{
-			Allowed:    false,
-			LimitType:  api.LimitTypeBackend,
-			LimitRPM:   limits.RequestsPerMinute,
-			LimitTPM:   limits.TokensPerMinute,
-			RetryAfter: time.Second,
-		}, nil
+		return denyDecision(limits, api.LimitTypeBackend, time.Second), nil
 	}
 }
 
-// onStoreErrFast: fail-open only if local lease can cover cost; else backend deny.
 func (l *Limiter) onStoreErrFast(key api.Key, limits api.Limits, cost api.Cost, _ error) (api.Decision, error) {
-	if l.failMode == api.FailOpen && l.pool.Has(key, cost) {
+	if l.failMode == api.FailOpen && l.pool.Has(key, cost, limits) {
 		id, err := l.newID()
 		if err != nil {
-			return api.Decision{
-				Allowed:    false,
-				LimitType:  api.LimitTypeBackend,
-				LimitRPM:   limits.RequestsPerMinute,
-				LimitTPM:   limits.TokensPerMinute,
-				RetryAfter: time.Second,
-			}, nil
+			return denyDecision(limits, api.LimitTypeBackend, time.Second), nil
 		}
 		if d, ok := l.pool.TryDebit(key, limits, cost, id); ok {
 			return d, nil
 		}
 	}
-	return api.Decision{
-		Allowed:    false,
-		LimitType:  api.LimitTypeBackend,
-		LimitRPM:   limits.RequestsPerMinute,
-		LimitTPM:   limits.TokensPerMinute,
-		RetryAfter: time.Second,
-	}, nil
+	return denyDecision(limits, api.LimitTypeBackend, time.Second), nil
 }
 
 // Settle implements api.Limiter.
 func (l *Limiter) Settle(ctx context.Context, reservationID string, actualTokens int64) (api.Decision, error) {
 	if l.pool != nil {
-		if _, ok := l.pool.GetReservation(reservationID); ok {
+		if r, ok := l.pool.GetReservation(reservationID); ok {
+			if r.Limits.Split() {
+				return api.Decision{}, store.ErrWrongSettleMode
+			}
 			dec, err := l.pool.SettleLocal(reservationID, actualTokens)
 			if err != nil {
 				return api.Decision{}, err
 			}
 			if dec.OvershootTPM > 0 {
-				r, _ := l.pool.GetReservation(reservationID)
 				need := dec.OvershootTPM
 				l.pool.NoteBorrow()
-				br, berr := l.store.Borrow(ctx, r.Key, r.Limits, 0, need, 0, need)
+				br, berr := l.store.Borrow(ctx, r.Key, r.Limits, store.BorrowSpec{
+					MinTPM: need, ChunkTPM: need,
+				})
 				if berr == nil && br.Allowed {
-					l.pool.CreditLease(r.Key, r.Limits, br.GotRPM, br.GotTPM)
+					l.pool.CreditLease(r.Key, r.Limits, br.GotRPM, br.GotTPM, 0, 0)
 					l.pool.ApplyBorrowedDeficit(reservationID, br.GotTPM)
 					if updated, ok := l.pool.GetReservation(reservationID); ok {
 						return updated.LastDecision, nil
@@ -220,6 +250,37 @@ func (l *Limiter) Settle(ctx context.Context, reservationID string, actualTokens
 		}
 	}
 	return l.store.Settle(ctx, reservationID, actualTokens)
+}
+
+// SettleIO implements api.Limiter.
+func (l *Limiter) SettleIO(ctx context.Context, reservationID string, actualInput, actualOutput int64) (api.Decision, error) {
+	if l.pool != nil {
+		if r, ok := l.pool.GetReservation(reservationID); ok {
+			if !r.Limits.Split() {
+				return api.Decision{}, store.ErrWrongSettleMode
+			}
+			dec, err := l.pool.SettleLocalIO(reservationID, actualInput, actualOutput)
+			if err != nil {
+				return api.Decision{}, err
+			}
+			if dec.OvershootITPM > 0 || dec.OvershootOTPM > 0 {
+				l.pool.NoteBorrow()
+				br, berr := l.store.Borrow(ctx, r.Key, r.Limits, store.BorrowSpec{
+					MinITPM: dec.OvershootITPM, ChunkITPM: dec.OvershootITPM,
+					MinOTPM: dec.OvershootOTPM, ChunkOTPM: dec.OvershootOTPM,
+				})
+				if berr == nil && br.Allowed {
+					l.pool.CreditLease(r.Key, r.Limits, br.GotRPM, 0, br.GotITPM, br.GotOTPM)
+					l.pool.ApplyBorrowedDeficitIO(reservationID, br.GotITPM, br.GotOTPM)
+					if updated, ok := l.pool.GetReservation(reservationID); ok {
+						return updated.LastDecision, nil
+					}
+				}
+			}
+			return dec, nil
+		}
+	}
+	return l.store.SettleIO(ctx, reservationID, actualInput, actualOutput)
 }
 
 // Refund implements api.Limiter.
@@ -239,12 +300,11 @@ func (l *Limiter) Close(ctx context.Context) error {
 	}
 	var first error
 	for _, snap := range l.pool.SnapshotLeases() {
-		if err := l.store.Return(ctx, snap.Key, snap.Limits, snap.RPM, snap.TPM); err != nil && first == nil {
+		if err := l.store.Return(ctx, snap.Key, snap.Limits, snap.RPM, snap.TPM, snap.ITPM, snap.OTPM); err != nil && first == nil {
 			first = err
 		}
 	}
 	return first
 }
 
-// Ensure interface compliance.
 var _ api.Limiter = (*Limiter)(nil)

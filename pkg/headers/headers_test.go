@@ -34,3 +34,21 @@ func TestWrite(t *testing.T) {
 		t.Fatal("missing reset headers")
 	}
 }
+
+func TestWriteSplit(t *testing.T) {
+	h := make(http.Header)
+	headers.Write(h, api.Decision{
+		LimitRPM: 60, RemainingRPM: 59,
+		LimitTPM: 1000, RemainingTPM: 900,
+		LimitITPM: 2000, RemainingITPM: 1800,
+		LimitOTPM: 1000, RemainingOTPM: 900,
+		ResetITPM: time.Now().Add(time.Minute),
+		ResetOTPM: time.Now().Add(time.Minute),
+	})
+	if h.Get(headers.RemainingInputTokens) != "1800" {
+		t.Fatal(h.Get(headers.RemainingInputTokens))
+	}
+	if h.Get(headers.LimitOutputTokens) != "1000" {
+		t.Fatal(h.Get(headers.LimitOutputTokens))
+	}
+}

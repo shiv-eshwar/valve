@@ -15,13 +15,21 @@ class Decision:
     limit_type: str
     remaining_rpm: int
     remaining_tpm: int
+    remaining_itpm: int
+    remaining_otpm: int
     limit_rpm: int
     limit_tpm: int
+    limit_itpm: int
+    limit_otpm: int
     retry_after_ms: int
     reservation_id: str
     overshoot_tpm: int
+    overshoot_itpm: int
+    overshoot_otpm: int
     reset_rpm: str
     reset_tpm: str
+    reset_itpm: str
+    reset_otpm: str
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Decision":
@@ -30,13 +38,21 @@ class Decision:
             limit_type=str(data.get("limit_type") or ""),
             remaining_rpm=int(data.get("remaining_rpm") or 0),
             remaining_tpm=int(data.get("remaining_tpm") or 0),
+            remaining_itpm=int(data.get("remaining_itpm") or 0),
+            remaining_otpm=int(data.get("remaining_otpm") or 0),
             limit_rpm=int(data.get("limit_rpm") or 0),
             limit_tpm=int(data.get("limit_tpm") or 0),
+            limit_itpm=int(data.get("limit_itpm") or 0),
+            limit_otpm=int(data.get("limit_otpm") or 0),
             retry_after_ms=int(data.get("retry_after_ms") or 0),
             reservation_id=str(data.get("reservation_id") or ""),
             overshoot_tpm=int(data.get("overshoot_tpm") or 0),
+            overshoot_itpm=int(data.get("overshoot_itpm") or 0),
+            overshoot_otpm=int(data.get("overshoot_otpm") or 0),
             reset_rpm=str(data.get("reset_rpm") or ""),
             reset_tpm=str(data.get("reset_tpm") or ""),
+            reset_itpm=str(data.get("reset_itpm") or ""),
+            reset_otpm=str(data.get("reset_otpm") or ""),
         )
 
 
@@ -80,17 +96,28 @@ class ValveClient:
         model: str,
         *,
         requests_per_minute: int,
-        tokens_per_minute: int,
+        tokens_per_minute: int = 0,
+        input_tokens_per_minute: int = 0,
+        output_tokens_per_minute: int = 0,
         requests: int = 1,
-        tokens: int,
+        tokens: int = 0,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
     ) -> Decision:
+        limits: dict[str, int] = {"requests_per_minute": requests_per_minute}
+        cost: dict[str, int] = {"requests": requests}
+        if input_tokens_per_minute > 0 and output_tokens_per_minute > 0:
+            limits["input_tokens_per_minute"] = input_tokens_per_minute
+            limits["output_tokens_per_minute"] = output_tokens_per_minute
+            cost["input_tokens"] = input_tokens
+            cost["output_tokens"] = output_tokens
+        else:
+            limits["tokens_per_minute"] = tokens_per_minute
+            cost["tokens"] = tokens
         body = {
             "key": {"subject": subject, "model": model},
-            "limits": {
-                "requests_per_minute": requests_per_minute,
-                "tokens_per_minute": tokens_per_minute,
-            },
-            "cost": {"requests": requests, "tokens": tokens},
+            "limits": limits,
+            "cost": cost,
         }
         return Decision.from_dict(self._post("/v1/check", body))
 
@@ -99,6 +126,20 @@ class ValveClient:
             self._post(
                 "/v1/settle",
                 {"reservation_id": reservation_id, "actual_tokens": actual_tokens},
+            )
+        )
+
+    def settle_io(
+        self, reservation_id: str, actual_input_tokens: int, actual_output_tokens: int
+    ) -> Decision:
+        return Decision.from_dict(
+            self._post(
+                "/v1/settle",
+                {
+                    "reservation_id": reservation_id,
+                    "actual_input_tokens": actual_input_tokens,
+                    "actual_output_tokens": actual_output_tokens,
+                },
             )
         )
 
@@ -120,7 +161,6 @@ def main() -> None:
         tokens=100,
     )
     if not d.allowed:
-        # Gateway pattern: map deny → HTTP 429; valved itself returns 200 + allowed=false.
         print(
             f"denied limit_type={d.limit_type} retry_after_ms={d.retry_after_ms}",
             file=sys.stderr,

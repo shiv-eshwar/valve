@@ -38,6 +38,28 @@ class _Handler(BaseHTTPRequestHandler):
             return
 
         if self.path == "/v1/settle":
+            if "actual_input_tokens" in body or "actual_output_tokens" in body:
+                self._json(
+                    200,
+                    {
+                        "allowed": True,
+                        "limit_type": "",
+                        "remaining_rpm": 59,
+                        "remaining_tpm": 400,
+                        "remaining_itpm": 900,
+                        "remaining_otpm": 400,
+                        "limit_rpm": 60,
+                        "limit_tpm": 500,
+                        "limit_itpm": 1000,
+                        "limit_otpm": 500,
+                        "retry_after_ms": 0,
+                        "reservation_id": body.get("reservation_id", ""),
+                        "overshoot_tpm": 0,
+                        "reset_rpm": "2026-08-01T00:00:00Z",
+                        "reset_tpm": "2026-08-01T00:00:00Z",
+                    },
+                )
+                return
             self._json(
                 200,
                 {
@@ -112,6 +134,11 @@ class ValveClientTests(unittest.TestCase):
 
     def test_refund(self) -> None:
         self.client.refund("res-1")  # no exception
+
+    def test_settle_io(self) -> None:
+        s = self.client.settle_io("res-1", 80, 40)
+        self.assertEqual(s.remaining_itpm, 900)
+        self.assertEqual(s.remaining_otpm, 400)
 
     def test_http_error(self) -> None:
         with self.assertRaises(ValveError) as ctx:

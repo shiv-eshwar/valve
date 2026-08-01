@@ -15,10 +15,17 @@ const (
 	LimitTokens       = "x-ratelimit-limit-tokens"
 	RemainingTokens   = "x-ratelimit-remaining-tokens"
 	ResetTokens       = "x-ratelimit-reset-tokens"
-	RetryAfter        = "Retry-After"
+	LimitInputTokens     = "x-ratelimit-limit-input-tokens"
+	RemainingInputTokens = "x-ratelimit-remaining-input-tokens"
+	ResetInputTokens     = "x-ratelimit-reset-input-tokens"
+	LimitOutputTokens     = "x-ratelimit-limit-output-tokens"
+	RemainingOutputTokens = "x-ratelimit-remaining-output-tokens"
+	ResetOutputTokens     = "x-ratelimit-reset-output-tokens"
+	RetryAfter = "Retry-After"
 )
 
 // Write sets OpenAI-compatible rate limit headers from a Decision.
+// When ITPM/OTPM fields are set, also writes input/output token headers.
 func Write(h http.Header, d api.Decision) {
 	h.Set(LimitRequests, strconv.FormatInt(d.LimitRPM, 10))
 	h.Set(RemainingRequests, strconv.FormatInt(d.RemainingRPM, 10))
@@ -30,6 +37,20 @@ func Write(h http.Header, d api.Decision) {
 	if !d.ResetTPM.IsZero() {
 		h.Set(ResetTokens, formatReset(d.ResetTPM))
 	}
+	if d.LimitITPM > 0 || d.RemainingITPM > 0 || !d.ResetITPM.IsZero() {
+		h.Set(LimitInputTokens, strconv.FormatInt(d.LimitITPM, 10))
+		h.Set(RemainingInputTokens, strconv.FormatInt(d.RemainingITPM, 10))
+		if !d.ResetITPM.IsZero() {
+			h.Set(ResetInputTokens, formatReset(d.ResetITPM))
+		}
+	}
+	if d.LimitOTPM > 0 || d.RemainingOTPM > 0 || !d.ResetOTPM.IsZero() {
+		h.Set(LimitOutputTokens, strconv.FormatInt(d.LimitOTPM, 10))
+		h.Set(RemainingOutputTokens, strconv.FormatInt(d.RemainingOTPM, 10))
+		if !d.ResetOTPM.IsZero() {
+			h.Set(ResetOutputTokens, formatReset(d.ResetOTPM))
+		}
+	}
 	if d.RetryAfter > 0 {
 		secs := int(d.RetryAfter.Round(time.Second) / time.Second)
 		if secs < 1 {
@@ -40,7 +61,6 @@ func Write(h http.Header, d api.Decision) {
 }
 
 func formatReset(t time.Time) string {
-	// OpenAI often uses relative duration strings; seconds-until is widely parseable.
 	d := time.Until(t)
 	if d < 0 {
 		d = 0

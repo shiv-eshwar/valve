@@ -63,9 +63,10 @@ make compose-smoke
 | **Gin** middleware wrapper around `pkg/middleware/http` | middleware | Done — [`examples/gin-ratelimit/`](./examples/gin-ratelimit/) |
 | Grafana dashboard JSON scraping `valve_*` metrics | ops | Done — [`deploy/grafana/`](./deploy/grafana/) |
 | Documented sticky-routing notes for hot org keys | docs | Done — [`docs/STICKY_ROUTING.md`](./docs/STICKY_ROUTING.md) |
-| Split **ITPM / OTPM** (Anthropic-shaped) buckets | core | Open |
-| **Echo** middleware wrapper (mirror Gin example) | middleware | Open |
-| Example against **vLLM** OpenAI-compatible server | examples | Open |
+| Split **ITPM / OTPM** (Anthropic-shaped) buckets | core | Done — `Limits.Split()` + `SettleIO` (v0.2.0) |
+| **Echo** middleware wrapper (mirror Gin example) | middleware | Done — [`examples/echo-ratelimit/`](./examples/echo-ratelimit/) |
+| Example against **vLLM** OpenAI-compatible server | examples | Done — [`examples/vllm-proxy/`](./examples/vllm-proxy/) |
+| Helm chart for Redis + `valved` | ops | Done — [`deploy/helm/valve/`](./deploy/helm/valve/) |
 
 ## Code of conduct
 

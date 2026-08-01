@@ -25,6 +25,7 @@ Most rate limiters count requests. LLM APIs burn **tokens**. valve meters both.
 ## Features
 
 - **RPM + TPM** dual token-bucket, all-or-nothing Check
+- **ITPM + OTPM** split mode (Anthropic-shaped) via `SettleIO`
 - **Reserve → Settle → Refund** for unknown LLM output tokens
 - **Fast path**: in-process deny cache + local lease chunks (opt-in)
 - **OpenAI-compatible** `x-ratelimit-*` headers
@@ -49,7 +50,7 @@ Most rate limiters count requests. LLM APIs burn **tokens**. valve meters both.
 ## Install
 
 ```bash
-go get github.com/shiv-eshwar/valve@v0.1.1
+go get github.com/shiv-eshwar/valve@v0.2.0
 ```
 
 Requires Go 1.24+.
@@ -147,6 +148,9 @@ cd examples/openai-proxy && go run .
 | --- | --- |
 | Python HTTP client | [`examples/python-client/`](./examples/python-client/) |
 | Gin + `httpmw` demo | [`examples/gin-ratelimit/`](./examples/gin-ratelimit/) |
+| Echo + `httpmw` demo | [`examples/echo-ratelimit/`](./examples/echo-ratelimit/) |
+| vLLM via openai-proxy | [`examples/vllm-proxy/`](./examples/vllm-proxy/) |
+| Helm chart | [`deploy/helm/valve/`](./deploy/helm/valve/) |
 | Grafana dashboard | [`deploy/grafana/valve-dashboard.json`](./deploy/grafana/valve-dashboard.json) |
 | Sticky routing notes | [`docs/STICKY_ROUTING.md`](./docs/STICKY_ROUTING.md) |
 

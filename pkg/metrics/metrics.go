@@ -122,6 +122,24 @@ func (o *ObservedLimiter) Settle(ctx context.Context, reservationID string, actu
 	return d, nil
 }
 
+// SettleIO implements api.Limiter.
+func (o *ObservedLimiter) SettleIO(ctx context.Context, reservationID string, actualInput, actualOutput int64) (api.Decision, error) {
+	d, err := o.inner.SettleIO(ctx, reservationID, actualInput, actualOutput)
+	if err != nil {
+		o.storeErrs.Inc()
+		o.settles.WithLabelValues("error").Inc()
+		return d, err
+	}
+	o.settles.WithLabelValues("ok").Inc()
+	if d.OvershootITPM > 0 {
+		o.overshoot.Add(float64(d.OvershootITPM))
+	}
+	if d.OvershootOTPM > 0 {
+		o.overshoot.Add(float64(d.OvershootOTPM))
+	}
+	return d, nil
+}
+
 // Refund implements api.Limiter.
 func (o *ObservedLimiter) Refund(ctx context.Context, reservationID string) error {
 	err := o.inner.Refund(ctx, reservationID)

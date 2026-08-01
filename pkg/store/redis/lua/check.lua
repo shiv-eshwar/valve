@@ -89,6 +89,7 @@ redis.call('HMSET', tpm_key, 'tokens', tpm_tokens, 'last_ms', now_ms)
 redis.call('HMSET', res_key,
   'subject', subject,
   'model', model,
+  'mode', 'classic',
   'rpm_cost', cost_rpm,
   'tpm_reserved', cost_tpm,
   'limit_rpm', limit_rpm,

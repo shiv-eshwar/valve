@@ -1,0 +1,21 @@
+replicaCount: 2
+
+image:
+  repository: valve
+  tag: local
+  pullPolicy: IfNotPresent
+
+service:
+  httpPort: 8080
+  grpcPort: 9090
+
+config:
+  redisAddr: "valve-redis:6379"
+  listen: ":8080"
+  grpcListen: ":9090"
+  fastPath: "true"
+  failMode: "closed"
+
+redis:
+  enabled: true
+  image: redis:7-alpine

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: valve
+description: Dual-dimension (RPM + TPM / ITPM+OTPM) rate limiter sidecar
+type: application
+version: 0.2.0
+appVersion: "0.2.0"

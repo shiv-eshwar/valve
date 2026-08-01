@@ -29,7 +29,15 @@ func (s *grpcServer) Check(ctx context.Context, req *valvepb.CheckRequest) (*val
 }
 
 func (s *grpcServer) Settle(ctx context.Context, req *valvepb.SettleRequest) (*valvepb.SettleResponse, error) {
-	d, err := s.lim.Settle(ctx, req.GetReservationId(), req.GetActualTokens())
+	var (
+		d   api.Decision
+		err error
+	)
+	if req.ActualInputTokens != nil || req.ActualOutputTokens != nil {
+		d, err = s.lim.SettleIO(ctx, req.GetReservationId(), req.GetActualInputTokens(), req.GetActualOutputTokens())
+	} else {
+		d, err = s.lim.Settle(ctx, req.GetReservationId(), req.GetActualTokens())
+	}
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
 	}

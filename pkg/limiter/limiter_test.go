@@ -19,11 +19,14 @@ func (errStore) Check(context.Context, api.Key, api.Limits, api.Cost, string) (a
 func (errStore) Settle(context.Context, string, int64) (api.Decision, error) {
 	return api.Decision{}, errors.New("boom")
 }
+func (errStore) SettleIO(context.Context, string, int64, int64) (api.Decision, error) {
+	return api.Decision{}, errors.New("boom")
+}
 func (errStore) Refund(context.Context, string) error { return errors.New("boom") }
-func (errStore) Borrow(context.Context, api.Key, api.Limits, int64, int64, int64, int64) (store.BorrowResult, error) {
+func (errStore) Borrow(context.Context, api.Key, api.Limits, store.BorrowSpec) (store.BorrowResult, error) {
 	return store.BorrowResult{}, errors.New("boom")
 }
-func (errStore) Return(context.Context, api.Key, api.Limits, int64, int64) error {
+func (errStore) Return(context.Context, api.Key, api.Limits, int64, int64, int64, int64) error {
 	return errors.New("boom")
 }
 

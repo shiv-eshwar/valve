@@ -12,6 +12,8 @@ import (
 type localBucket struct {
 	rpm       int64
 	tpm       int64
+	itpm      int64
+	otpm      int64
 	expiresAt time.Time
 	limits    api.Limits
 }
@@ -22,6 +24,8 @@ type Reservation struct {
 	Limits       api.Limits
 	RPMCost      int64
 	TPMReserved  int64
+	ITPMReserved int64
+	OTPMReserved int64
 	Status       string // pending | settled | refunded
 	LastDecision api.Decision
 	ExpiresAt    time.Time
@@ -96,26 +100,34 @@ func (p *Pool) getLeaseLocked(key api.Key, now time.Time) *localBucket {
 		return nil
 	}
 	if !now.Before(b.expiresAt) {
-		// stale — discard without auto-return here (Close handles return)
 		delete(p.lease, k)
 		return nil
 	}
 	return b
 }
 
-// Has reports whether the lease can cover cost.
-func (p *Pool) Has(key api.Key, cost api.Cost) bool {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	b := p.getLeaseLocked(key, p.now())
+func covers(b *localBucket, cost api.Cost, split bool) bool {
 	if b == nil {
 		return false
 	}
-	return b.rpm >= cost.Requests && b.tpm >= cost.Tokens
+	if b.rpm < cost.Requests {
+		return false
+	}
+	if split {
+		return b.itpm >= cost.InputTokens && b.otpm >= cost.OutputTokens
+	}
+	return b.tpm >= cost.Tokens
+}
+
+// Has reports whether the lease can cover cost.
+func (p *Pool) Has(key api.Key, cost api.Cost, limits api.Limits) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return covers(p.getLeaseLocked(key, p.now()), cost, limits.Split())
 }
 
 // CreditLease adds borrowed credits and refreshes TTL.
-func (p *Pool) CreditLease(key api.Key, limits api.Limits, rpm, tpm int64) {
+func (p *Pool) CreditLease(key api.Key, limits api.Limits, rpm, tpm, itpm, otpm int64) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	now := p.now()
@@ -127,6 +139,8 @@ func (p *Pool) CreditLease(key api.Key, limits api.Limits, rpm, tpm int64) {
 	}
 	b.rpm += rpm
 	b.tpm += tpm
+	b.itpm += itpm
+	b.otpm += otpm
 	b.limits = limits
 	b.expiresAt = now.Add(p.cfg.LeaseTTL)
 }
@@ -138,30 +152,48 @@ func (p *Pool) TryDebit(key api.Key, limits api.Limits, cost api.Cost, reservati
 	now := p.now()
 	p.purgeResLocked(now)
 	b := p.getLeaseLocked(key, now)
-	if b == nil || b.rpm < cost.Requests || b.tpm < cost.Tokens {
+	split := limits.Split()
+	if !covers(b, cost, split) {
 		p.miss++
 		return api.Decision{}, false
 	}
 	b.rpm -= cost.Requests
-	b.tpm -= cost.Tokens
+	if split {
+		b.itpm -= cost.InputTokens
+		b.otpm -= cost.OutputTokens
+	} else {
+		b.tpm -= cost.Tokens
+	}
 	b.expiresAt = now.Add(p.cfg.LeaseTTL)
 	p.hits++
 	p.res[reservationID] = &Reservation{
-		Key:         key,
-		Limits:      limits,
-		RPMCost:     cost.Requests,
-		TPMReserved: cost.Tokens,
-		Status:      "pending",
-		ExpiresAt:   now.Add(store.ReservationTTL),
+		Key:          key,
+		Limits:       limits,
+		RPMCost:      cost.Requests,
+		TPMReserved:  cost.Tokens,
+		ITPMReserved: cost.InputTokens,
+		OTPMReserved: cost.OutputTokens,
+		Status:       "pending",
+		ExpiresAt:    now.Add(store.ReservationTTL),
 	}
-	return api.Decision{
+	dec := api.Decision{
 		Allowed:       true,
 		RemainingRPM:  b.rpm,
-		RemainingTPM:  b.tpm,
 		LimitRPM:      limits.RequestsPerMinute,
-		LimitTPM:      limits.TokensPerMinute,
 		ReservationID: reservationID,
-	}, true
+	}
+	if split {
+		dec.RemainingITPM = b.itpm
+		dec.RemainingOTPM = b.otpm
+		dec.RemainingTPM = b.otpm
+		dec.LimitITPM = limits.InputTokensPerMinute
+		dec.LimitOTPM = limits.OutputTokensPerMinute
+		dec.LimitTPM = limits.OutputTokensPerMinute
+	} else {
+		dec.RemainingTPM = b.tpm
+		dec.LimitTPM = limits.TokensPerMinute
+	}
+	return dec, true
 }
 
 // NoteBorrow increments borrow counter.
@@ -180,7 +212,7 @@ func (p *Pool) GetReservation(id string) (*Reservation, bool) {
 	return r, ok
 }
 
-// SettleLocal adjusts lease for actual token usage.
+// SettleLocal adjusts lease for classic TPM actual usage.
 func (p *Pool) SettleLocal(id string, actualTokens int64) (api.Decision, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -189,6 +221,9 @@ func (p *Pool) SettleLocal(id string, actualTokens int64) (api.Decision, error) 
 	r, ok := p.res[id]
 	if !ok {
 		return api.Decision{}, store.ErrReservationNotFound
+	}
+	if r.Limits.Split() {
+		return api.Decision{}, store.ErrWrongSettleMode
 	}
 	if r.Status == "settled" {
 		return r.LastDecision, nil
@@ -242,19 +277,84 @@ func (p *Pool) SettleLocal(id string, actualTokens int64) (api.Decision, error) 
 	return dec, nil
 }
 
-// DeficitAfterSettle returns TPM still needed from Redis after a settle with overshoot.
-// Call after SettleLocal when OvershootTPM > 0 — we already zeroed local lease.
-func (p *Pool) PeekOvershoot(id string) int64 {
+// SettleLocalIO adjusts lease for split ITPM/OTPM actual usage.
+func (p *Pool) SettleLocalIO(id string, actualInput, actualOutput int64) (api.Decision, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	now := p.now()
+	p.purgeResLocked(now)
 	r, ok := p.res[id]
 	if !ok {
-		return 0
+		return api.Decision{}, store.ErrReservationNotFound
 	}
-	return r.LastDecision.OvershootTPM
+	if !r.Limits.Split() {
+		return api.Decision{}, store.ErrWrongSettleMode
+	}
+	if r.Status == "settled" {
+		return r.LastDecision, nil
+	}
+	if r.Status == "refunded" {
+		return api.Decision{}, store.ErrReservationRefunded
+	}
+	if actualInput < 0 {
+		actualInput = 0
+	}
+	if actualOutput < 0 {
+		actualOutput = 0
+	}
+
+	b := p.getLeaseLocked(r.Key, now)
+	if b == nil {
+		b = &localBucket{limits: r.Limits, expiresAt: now.Add(p.cfg.LeaseTTL)}
+		p.lease[p.keyStr(r.Key)] = b
+	}
+
+	overIn, restIn := applyLocalDelta(&b.itpm, r.ITPMReserved, actualInput)
+	overOut, restOut := applyLocalDelta(&b.otpm, r.OTPMReserved, actualOutput)
+	b.expiresAt = now.Add(p.cfg.LeaseTTL)
+
+	dec := api.Decision{
+		Allowed:       true,
+		RemainingRPM:  b.rpm,
+		RemainingITPM: b.itpm,
+		RemainingOTPM: b.otpm,
+		RemainingTPM:  b.otpm,
+		LimitRPM:      r.Limits.RequestsPerMinute,
+		LimitITPM:     r.Limits.InputTokensPerMinute,
+		LimitOTPM:     r.Limits.OutputTokensPerMinute,
+		LimitTPM:      r.Limits.OutputTokensPerMinute,
+		ReservationID: id,
+		OvershootITPM: overIn,
+		OvershootOTPM: overOut,
+	}
+	r.Status = "settled"
+	r.LastDecision = dec
+	r.ExpiresAt = now.Add(store.ReservationTTL)
+	if restIn || restOut {
+		p.deny.Clear(r.Key)
+	}
+	return dec, nil
 }
 
-// ApplyBorrowedDeficit adds borrowed TPM then consumes overshoot against it.
+func applyLocalDelta(bal *int64, reserved, actual int64) (overshoot int64, restored bool) {
+	delta := reserved - actual
+	switch {
+	case delta > 0:
+		*bal += delta
+		return 0, true
+	case delta < 0:
+		need := -delta
+		if *bal >= need {
+			*bal -= need
+		} else {
+			overshoot = need - *bal
+			*bal = 0
+		}
+	}
+	return overshoot, false
+}
+
+// ApplyBorrowedDeficit adds borrowed TPM then consumes classic overshoot.
 func (p *Pool) ApplyBorrowedDeficit(id string, gotTPM int64) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -281,7 +381,45 @@ func (p *Pool) ApplyBorrowedDeficit(id string, gotTPM int64) {
 	r.LastDecision.RemainingRPM = b.rpm
 }
 
-// RefundLocal restores RPM+TPM to the lease.
+// ApplyBorrowedDeficitIO consumes split overshoot against borrowed ITPM/OTPM.
+func (p *Pool) ApplyBorrowedDeficitIO(id string, gotITPM, gotOTPM int64) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	r, ok := p.res[id]
+	if !ok {
+		return
+	}
+	b := p.getLeaseLocked(r.Key, p.now())
+	if b == nil {
+		return
+	}
+	b.itpm += gotITPM
+	b.otpm += gotOTPM
+	if over := r.LastDecision.OvershootITPM; over > 0 {
+		if b.itpm >= over {
+			b.itpm -= over
+			r.LastDecision.OvershootITPM = 0
+		} else {
+			r.LastDecision.OvershootITPM = over - b.itpm
+			b.itpm = 0
+		}
+	}
+	if over := r.LastDecision.OvershootOTPM; over > 0 {
+		if b.otpm >= over {
+			b.otpm -= over
+			r.LastDecision.OvershootOTPM = 0
+		} else {
+			r.LastDecision.OvershootOTPM = over - b.otpm
+			b.otpm = 0
+		}
+	}
+	r.LastDecision.RemainingITPM = b.itpm
+	r.LastDecision.RemainingOTPM = b.otpm
+	r.LastDecision.RemainingTPM = b.otpm
+	r.LastDecision.RemainingRPM = b.rpm
+}
+
+// RefundLocal restores credits to the lease.
 func (p *Pool) RefundLocal(id string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -303,7 +441,12 @@ func (p *Pool) RefundLocal(id string) error {
 		p.lease[p.keyStr(r.Key)] = b
 	}
 	b.rpm += r.RPMCost
-	b.tpm += r.TPMReserved
+	if r.Limits.Split() {
+		b.itpm += r.ITPMReserved
+		b.otpm += r.OTPMReserved
+	} else {
+		b.tpm += r.TPMReserved
+	}
 	b.expiresAt = now.Add(p.cfg.LeaseTTL)
 	r.Status = "refunded"
 	r.ExpiresAt = now.Add(store.ReservationTTL)
@@ -311,44 +454,42 @@ func (p *Pool) RefundLocal(id string) error {
 	return nil
 }
 
-// SnapshotLeases returns a copy of remaining lease credits for Close/Return.
-func (p *Pool) SnapshotLeases() []struct {
+// LeaseSnap is a Close/Return snapshot.
+type LeaseSnap struct {
 	Key    api.Key
 	Limits api.Limits
 	RPM    int64
 	TPM    int64
-} {
+	ITPM   int64
+	OTPM   int64
+}
+
+// SnapshotLeases returns a copy of remaining lease credits for Close/Return.
+func (p *Pool) SnapshotLeases() []LeaseSnap {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	now := p.now()
-	var out []struct {
-		Key    api.Key
-		Limits api.Limits
-		RPM    int64
-		TPM    int64
-	}
+	var out []LeaseSnap
 	for k, b := range p.lease {
 		if !now.Before(b.expiresAt) {
 			continue
 		}
-		if b.rpm <= 0 && b.tpm <= 0 {
+		if b.rpm <= 0 && b.tpm <= 0 && b.itpm <= 0 && b.otpm <= 0 {
 			continue
 		}
-		// decode key
 		parts := splitKey(k)
-		out = append(out, struct {
-			Key    api.Key
-			Limits api.Limits
-			RPM    int64
-			TPM    int64
-		}{
+		out = append(out, LeaseSnap{
 			Key:    api.Key{Subject: parts[0], Model: parts[1]},
 			Limits: b.limits,
 			RPM:    b.rpm,
 			TPM:    b.tpm,
+			ITPM:   b.itpm,
+			OTPM:   b.otpm,
 		})
 		b.rpm = 0
 		b.tpm = 0
+		b.itpm = 0
+		b.otpm = 0
 	}
 	return out
 }

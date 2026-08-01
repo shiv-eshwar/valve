@@ -11,10 +11,10 @@ Update this file whenever work lands. Do not delete remaining work — refine it
 
 | Field | Value |
 | --- | --- |
-| Phase | **6 — Adopter kits (complete)** |
-| Status | Python client, Gin example, Grafana dashboard, sticky-routing docs; local tag `v0.1.1` |
+| Phase | **7 — Provider-complete (complete)** |
+| Status | ITPM/OTPM split, Echo/vLLM kits, Helm; local tag `v0.2.0` |
 | Last updated | 2026-08-01 |
-| Next up | Optional: Echo wrapper, vLLM example, ITPM/OTPM; push `git push origin v0.1.1` when ready |
+| Next up | Push `git push origin main` and `git push origin v0.2.0` when ready; Envoy/multi-region still deferred |
 
 ---
 
@@ -206,6 +206,21 @@ Pulled from `WHAT_THIS_IS.md`:
 
 ---
 
+### Phase 7 — Provider-complete product
+
+**Goal:** Match Anthropic-shaped axes; finish adopter/ops surface for v0.2.0.
+
+**Estimate:** ~1–2 weeks
+
+- [x] ITPM/OTPM API + memory/Redis + `SettleIO` + classic regression tests
+- [x] Fast path lease chunks + headers + valved HTTP/gRPC/proto
+- [x] Echo example, vLLM README, Helm chart
+- [x] Docs + CHANGELOG + tag `v0.2.0`
+
+**Exit criteria:** Split mode end-to-end; Echo builds without Echo in root module; `helm template` succeeds; race tests green.
+
+---
+
 ## Suggested repo layout (Phase 1+)
 
 ```text
@@ -255,6 +270,7 @@ engineering.md
 | 2026-08-01 | MIT confirmed for v0.1.0 | Already in LICENSE; OSS default for library + sidecar |
 | 2026-08-01 | v0.1.0 scope = Phases 1–4 + polish | Dual-bucket, fast path, LLM helpers, valved, docs; no Envoy/Helm/CRDT |
 | 2026-08-01 | Phase 6 = adopter kits before Envoy/ITPM | Raise adoption without core API break; Gin stays in examples/ only |
+| 2026-08-01 | Phase 7 = ITPM/OTPM before Envoy; v0.2.0 | Close WHAT_THIS_IS Anthropic gap; additive SettleIO keeps classic TPM |
 
 ---
 
@@ -282,6 +298,7 @@ engineering.md
 | 4 | Ops / integration | **Done** (2026-08-01) |
 | 5 | OSS polish | **Done** (2026-08-01) |
 | 6 | Adopter kits | **Done** (2026-08-01) |
+| 7 | Provider-complete | **Done** (2026-08-01) |
 
 ---
 

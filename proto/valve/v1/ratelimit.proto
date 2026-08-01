@@ -12,11 +12,15 @@ message Key {
 message Limits {
   int64 requests_per_minute = 1;
   int64 tokens_per_minute = 2;
+  int64 input_tokens_per_minute = 3;
+  int64 output_tokens_per_minute = 4;
 }
 
 message Cost {
   int64 requests = 1;
   int64 tokens = 2;
+  int64 input_tokens = 3;
+  int64 output_tokens = 4;
 }
 
 message Decision {
@@ -29,6 +33,12 @@ message Decision {
   int64 retry_after_ms = 7;
   string reservation_id = 8;
   int64 overshoot_tpm = 9;
+  int64 remaining_itpm = 10;
+  int64 remaining_otpm = 11;
+  int64 limit_itpm = 12;
+  int64 limit_otpm = 13;
+  int64 overshoot_itpm = 14;
+  int64 overshoot_otpm = 15;
 }
 
 message CheckRequest {
@@ -43,7 +53,9 @@ message CheckResponse {
 
 message SettleRequest {
   string reservation_id = 1;
-  int64 actual_tokens = 2;
+  optional int64 actual_tokens = 2;
+  optional int64 actual_input_tokens = 3;
+  optional int64 actual_output_tokens = 4;
 }
 
 message SettleResponse {

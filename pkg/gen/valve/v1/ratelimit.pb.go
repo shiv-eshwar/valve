@@ -74,11 +74,13 @@ func (x *Key) GetModel() string {
 }
 
 type Limits struct {
-	state             protoimpl.MessageState `protogen:"open.v1"`
-	RequestsPerMinute int64                  `protobuf:"varint,1,opt,name=requests_per_minute,json=requestsPerMinute,proto3" json:"requests_per_minute,omitempty"`
-	TokensPerMinute   int64                  `protobuf:"varint,2,opt,name=tokens_per_minute,json=tokensPerMinute,proto3" json:"tokens_per_minute,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	RequestsPerMinute     int64                  `protobuf:"varint,1,opt,name=requests_per_minute,json=requestsPerMinute,proto3" json:"requests_per_minute,omitempty"`
+	TokensPerMinute       int64                  `protobuf:"varint,2,opt,name=tokens_per_minute,json=tokensPerMinute,proto3" json:"tokens_per_minute,omitempty"`
+	InputTokensPerMinute  int64                  `protobuf:"varint,3,opt,name=input_tokens_per_minute,json=inputTokensPerMinute,proto3" json:"input_tokens_per_minute,omitempty"`
+	OutputTokensPerMinute int64                  `protobuf:"varint,4,opt,name=output_tokens_per_minute,json=outputTokensPerMinute,proto3" json:"output_tokens_per_minute,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *Limits) Reset() {
@@ -125,10 +127,26 @@ func (x *Limits) GetTokensPerMinute() int64 {
 	return 0
 }
 
+func (x *Limits) GetInputTokensPerMinute() int64 {
+	if x != nil {
+		return x.InputTokensPerMinute
+	}
+	return 0
+}
+
+func (x *Limits) GetOutputTokensPerMinute() int64 {
+	if x != nil {
+		return x.OutputTokensPerMinute
+	}
+	return 0
+}
+
 type Cost struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Requests      int64                  `protobuf:"varint,1,opt,name=requests,proto3" json:"requests,omitempty"`
 	Tokens        int64                  `protobuf:"varint,2,opt,name=tokens,proto3" json:"tokens,omitempty"`
+	InputTokens   int64                  `protobuf:"varint,3,opt,name=input_tokens,json=inputTokens,proto3" json:"input_tokens,omitempty"`
+	OutputTokens  int64                  `protobuf:"varint,4,opt,name=output_tokens,json=outputTokens,proto3" json:"output_tokens,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -177,6 +195,20 @@ func (x *Cost) GetTokens() int64 {
 	return 0
 }
 
+func (x *Cost) GetInputTokens() int64 {
+	if x != nil {
+		return x.InputTokens
+	}
+	return 0
+}
+
+func (x *Cost) GetOutputTokens() int64 {
+	if x != nil {
+		return x.OutputTokens
+	}
+	return 0
+}
+
 type Decision struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Allowed       bool                   `protobuf:"varint,1,opt,name=allowed,proto3" json:"allowed,omitempty"`
@@ -188,6 +220,12 @@ type Decision struct {
 	RetryAfterMs  int64                  `protobuf:"varint,7,opt,name=retry_after_ms,json=retryAfterMs,proto3" json:"retry_after_ms,omitempty"`
 	ReservationId string                 `protobuf:"bytes,8,opt,name=reservation_id,json=reservationId,proto3" json:"reservation_id,omitempty"`
 	OvershootTpm  int64                  `protobuf:"varint,9,opt,name=overshoot_tpm,json=overshootTpm,proto3" json:"overshoot_tpm,omitempty"`
+	RemainingItpm int64                  `protobuf:"varint,10,opt,name=remaining_itpm,json=remainingItpm,proto3" json:"remaining_itpm,omitempty"`
+	RemainingOtpm int64                  `protobuf:"varint,11,opt,name=remaining_otpm,json=remainingOtpm,proto3" json:"remaining_otpm,omitempty"`
+	LimitItpm     int64                  `protobuf:"varint,12,opt,name=limit_itpm,json=limitItpm,proto3" json:"limit_itpm,omitempty"`
+	LimitOtpm     int64                  `protobuf:"varint,13,opt,name=limit_otpm,json=limitOtpm,proto3" json:"limit_otpm,omitempty"`
+	OvershootItpm int64                  `protobuf:"varint,14,opt,name=overshoot_itpm,json=overshootItpm,proto3" json:"overshoot_itpm,omitempty"`
+	OvershootOtpm int64                  `protobuf:"varint,15,opt,name=overshoot_otpm,json=overshootOtpm,proto3" json:"overshoot_otpm,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -281,6 +319,48 @@ func (x *Decision) GetReservationId() string {
 func (x *Decision) GetOvershootTpm() int64 {
 	if x != nil {
 		return x.OvershootTpm
+	}
+	return 0
+}
+
+func (x *Decision) GetRemainingItpm() int64 {
+	if x != nil {
+		return x.RemainingItpm
+	}
+	return 0
+}
+
+func (x *Decision) GetRemainingOtpm() int64 {
+	if x != nil {
+		return x.RemainingOtpm
+	}
+	return 0
+}
+
+func (x *Decision) GetLimitItpm() int64 {
+	if x != nil {
+		return x.LimitItpm
+	}
+	return 0
+}
+
+func (x *Decision) GetLimitOtpm() int64 {
+	if x != nil {
+		return x.LimitOtpm
+	}
+	return 0
+}
+
+func (x *Decision) GetOvershootItpm() int64 {
+	if x != nil {
+		return x.OvershootItpm
+	}
+	return 0
+}
+
+func (x *Decision) GetOvershootOtpm() int64 {
+	if x != nil {
+		return x.OvershootOtpm
 	}
 	return 0
 }
@@ -390,11 +470,13 @@ func (x *CheckResponse) GetDecision() *Decision {
 }
 
 type SettleRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ReservationId string                 `protobuf:"bytes,1,opt,name=reservation_id,json=reservationId,proto3" json:"reservation_id,omitempty"`
-	ActualTokens  int64                  `protobuf:"varint,2,opt,name=actual_tokens,json=actualTokens,proto3" json:"actual_tokens,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	ReservationId      string                 `protobuf:"bytes,1,opt,name=reservation_id,json=reservationId,proto3" json:"reservation_id,omitempty"`
+	ActualTokens       *int64                 `protobuf:"varint,2,opt,name=actual_tokens,json=actualTokens,proto3,oneof" json:"actual_tokens,omitempty"`
+	ActualInputTokens  *int64                 `protobuf:"varint,3,opt,name=actual_input_tokens,json=actualInputTokens,proto3,oneof" json:"actual_input_tokens,omitempty"`
+	ActualOutputTokens *int64                 `protobuf:"varint,4,opt,name=actual_output_tokens,json=actualOutputTokens,proto3,oneof" json:"actual_output_tokens,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *SettleRequest) Reset() {
@@ -435,8 +517,22 @@ func (x *SettleRequest) GetReservationId() string {
 }
 
 func (x *SettleRequest) GetActualTokens() int64 {
-	if x != nil {
-		return x.ActualTokens
+	if x != nil && x.ActualTokens != nil {
+		return *x.ActualTokens
+	}
+	return 0
+}
+
+func (x *SettleRequest) GetActualInputTokens() int64 {
+	if x != nil && x.ActualInputTokens != nil {
+		return *x.ActualInputTokens
+	}
+	return 0
+}
+
+func (x *SettleRequest) GetActualOutputTokens() int64 {
+	if x != nil && x.ActualOutputTokens != nil {
+		return *x.ActualOutputTokens
 	}
 	return 0
 }
@@ -572,13 +668,17 @@ const file_proto_valve_v1_ratelimit_proto_rawDesc = "" +
 	"\x1eproto/valve/v1/ratelimit.proto\x12\bvalve.v1\"5\n" +
 	"\x03Key\x12\x18\n" +
 	"\asubject\x18\x01 \x01(\tR\asubject\x12\x14\n" +
-	"\x05model\x18\x02 \x01(\tR\x05model\"d\n" +
+	"\x05model\x18\x02 \x01(\tR\x05model\"\xd4\x01\n" +
 	"\x06Limits\x12.\n" +
 	"\x13requests_per_minute\x18\x01 \x01(\x03R\x11requestsPerMinute\x12*\n" +
-	"\x11tokens_per_minute\x18\x02 \x01(\x03R\x0ftokensPerMinute\":\n" +
+	"\x11tokens_per_minute\x18\x02 \x01(\x03R\x0ftokensPerMinute\x125\n" +
+	"\x17input_tokens_per_minute\x18\x03 \x01(\x03R\x14inputTokensPerMinute\x127\n" +
+	"\x18output_tokens_per_minute\x18\x04 \x01(\x03R\x15outputTokensPerMinute\"\x82\x01\n" +
 	"\x04Cost\x12\x1a\n" +
 	"\brequests\x18\x01 \x01(\x03R\brequests\x12\x16\n" +
-	"\x06tokens\x18\x02 \x01(\x03R\x06tokens\"\xb9\x02\n" +
+	"\x06tokens\x18\x02 \x01(\x03R\x06tokens\x12!\n" +
+	"\finput_tokens\x18\x03 \x01(\x03R\vinputTokens\x12#\n" +
+	"\routput_tokens\x18\x04 \x01(\x03R\foutputTokens\"\x93\x04\n" +
 	"\bDecision\x12\x18\n" +
 	"\aallowed\x18\x01 \x01(\bR\aallowed\x12\x1d\n" +
 	"\n" +
@@ -589,16 +689,30 @@ const file_proto_valve_v1_ratelimit_proto_rawDesc = "" +
 	"\tlimit_tpm\x18\x06 \x01(\x03R\blimitTpm\x12$\n" +
 	"\x0eretry_after_ms\x18\a \x01(\x03R\fretryAfterMs\x12%\n" +
 	"\x0ereservation_id\x18\b \x01(\tR\rreservationId\x12#\n" +
-	"\rovershoot_tpm\x18\t \x01(\x03R\fovershootTpm\"}\n" +
+	"\rovershoot_tpm\x18\t \x01(\x03R\fovershootTpm\x12%\n" +
+	"\x0eremaining_itpm\x18\n" +
+	" \x01(\x03R\rremainingItpm\x12%\n" +
+	"\x0eremaining_otpm\x18\v \x01(\x03R\rremainingOtpm\x12\x1d\n" +
+	"\n" +
+	"limit_itpm\x18\f \x01(\x03R\tlimitItpm\x12\x1d\n" +
+	"\n" +
+	"limit_otpm\x18\r \x01(\x03R\tlimitOtpm\x12%\n" +
+	"\x0eovershoot_itpm\x18\x0e \x01(\x03R\rovershootItpm\x12%\n" +
+	"\x0eovershoot_otpm\x18\x0f \x01(\x03R\rovershootOtpm\"}\n" +
 	"\fCheckRequest\x12\x1f\n" +
 	"\x03key\x18\x01 \x01(\v2\r.valve.v1.KeyR\x03key\x12(\n" +
 	"\x06limits\x18\x02 \x01(\v2\x10.valve.v1.LimitsR\x06limits\x12\"\n" +
 	"\x04cost\x18\x03 \x01(\v2\x0e.valve.v1.CostR\x04cost\"?\n" +
 	"\rCheckResponse\x12.\n" +
-	"\bdecision\x18\x01 \x01(\v2\x12.valve.v1.DecisionR\bdecision\"[\n" +
+	"\bdecision\x18\x01 \x01(\v2\x12.valve.v1.DecisionR\bdecision\"\x8f\x02\n" +
 	"\rSettleRequest\x12%\n" +
-	"\x0ereservation_id\x18\x01 \x01(\tR\rreservationId\x12#\n" +
-	"\ractual_tokens\x18\x02 \x01(\x03R\factualTokens\"@\n" +
+	"\x0ereservation_id\x18\x01 \x01(\tR\rreservationId\x12(\n" +
+	"\ractual_tokens\x18\x02 \x01(\x03H\x00R\factualTokens\x88\x01\x01\x123\n" +
+	"\x13actual_input_tokens\x18\x03 \x01(\x03H\x01R\x11actualInputTokens\x88\x01\x01\x125\n" +
+	"\x14actual_output_tokens\x18\x04 \x01(\x03H\x02R\x12actualOutputTokens\x88\x01\x01B\x10\n" +
+	"\x0e_actual_tokensB\x16\n" +
+	"\x14_actual_input_tokensB\x17\n" +
+	"\x15_actual_output_tokens\"@\n" +
 	"\x0eSettleResponse\x12.\n" +
 	"\bdecision\x18\x01 \x01(\v2\x12.valve.v1.DecisionR\bdecision\"6\n" +
 	"\rRefundRequest\x12%\n" +
@@ -658,6 +772,7 @@ func file_proto_valve_v1_ratelimit_proto_init() {
 	if File_proto_valve_v1_ratelimit_proto != nil {
 		return
 	}
+	file_proto_valve_v1_ratelimit_proto_msgTypes[6].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

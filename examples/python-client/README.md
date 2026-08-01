@@ -35,6 +35,18 @@ if not d.allowed:
 client.settle(d.reservation_id, actual_tokens=980)
 # Or on hard failure before upstream:
 # client.refund(d.reservation_id)
+
+# Anthropic-shaped ITPM/OTPM:
+d = client.check(
+    "org_123",
+    "claude",
+    requests_per_minute=60,
+    input_tokens_per_minute=40_000,
+    output_tokens_per_minute=8_000,
+    input_tokens=1200,
+    output_tokens=512,
+)
+client.settle_io(d.reservation_id, actual_input_tokens=1100, actual_output_tokens=400)
 ```
 
 Note: `valved` returns **HTTP 200** with `"allowed": false` on deny. Your edge/gateway should translate that to **429** for clients.

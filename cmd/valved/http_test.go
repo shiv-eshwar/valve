@@ -29,7 +29,32 @@ func TestHTTPCheckSettle(t *testing.T) {
 		t.Fatalf("%v", out)
 	}
 	resID, _ := out["reservation_id"].(string)
-	settleRaw, _ := json.Marshal(settleBody{ReservationID: resID, ActualTokens: 3})
+	settleRaw := []byte(`{"reservation_id":"` + resID + `","actual_tokens":3}`)
+	rr2 := httptest.NewRecorder()
+	h.ServeHTTP(rr2, httptest.NewRequest(http.MethodPost, "/v1/settle", bytes.NewReader(settleRaw)))
+	if rr2.Code != 200 {
+		t.Fatalf("settle=%d %s", rr2.Code, rr2.Body.String())
+	}
+}
+
+func TestHTTPSplitCheckSettleIO(t *testing.T) {
+	lim := limiter.New(memory.New())
+	apiH := &httpAPI{lim: lim, log: logx.New(&bytes.Buffer{})}
+	h := apiH.routes()
+
+	raw := []byte(`{"key":{"subject":"s","model":"m"},"limits":{"requests_per_minute":10,"input_tokens_per_minute":1000,"output_tokens_per_minute":500},"cost":{"requests":1,"input_tokens":100,"output_tokens":50}}`)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/check", bytes.NewReader(raw)))
+	if rr.Code != 200 {
+		t.Fatalf("code=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var out map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &out)
+	if out["allowed"] != true {
+		t.Fatalf("%v", out)
+	}
+	resID, _ := out["reservation_id"].(string)
+	settleRaw := []byte(`{"reservation_id":"` + resID + `","actual_input_tokens":80,"actual_output_tokens":40}`)
 	rr2 := httptest.NewRecorder()
 	h.ServeHTTP(rr2, httptest.NewRequest(http.MethodPost, "/v1/settle", bytes.NewReader(settleRaw)))
 	if rr2.Code != 200 {

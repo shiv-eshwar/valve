@@ -246,6 +246,8 @@ How the system must behave in each scenario.
 | Both buckets have credit | Allow; attach remaining/reset headers; create reservation when TPM cost &gt; 0 |
 | RPM exhausted, TPM OK | Deny `limit_type=requests`; `Retry-After` from RPM refill; L0 cache deny until reset |
 | TPM exhausted, RPM OK | Deny `limit_type=tokens`; same header pattern for tokens |
+| ITPM exhausted (split mode) | Deny `limit_type=input_tokens`; no debit to RPM/OTPM |
+| OTPM exhausted (split mode) | Deny `limit_type=output_tokens`; no debit to RPM/ITPM |
 | Both exhausted | Deny; report the dimension with longer wait (or both in body); `Retry-After` = max needed |
 | Cold key (first request) | Initialize buckets full (or at tier capacity); then debit |
 | Concurrent requests same subject | Single-threaded Lua on key; no double-spend; losers get deny or retry_after |
@@ -271,11 +273,12 @@ How the system must behave in each scenario.
 ### Core operations
 
 ```text
-Check(ctx, key, cost) -> Decision
-  key:  { subject, model, ... }
-  cost: { requests: 1, tokens: estimated }
+Check(ctx, key, limits, cost) -> Decision
+  classic cost: { requests, tokens }
+  split cost:   { requests, input_tokens, output_tokens } when limits set ITPM+OTPM
 
-Settle(ctx, reservation_id, actual_tokens) -> Decision
+Settle(ctx, reservation_id, actual_tokens) -> Decision          # classic
+SettleIO(ctx, reservation_id, actual_input, actual_output) -> Decision  # split
 Refund(ctx, reservation_id) -> error
 ```
 
@@ -283,15 +286,13 @@ Refund(ctx, reservation_id) -> error
 
 ```text
 Allowed       bool
-LimitType     "" | "requests" | "tokens" | "backend"
-RemainingRPM  int64
-RemainingTPM  int64
-LimitRPM      int64
-LimitTPM      int64
-ResetRPM      time
-ResetTPM      time
+LimitType     "" | "requests" | "tokens" | "input_tokens" | "output_tokens" | "backend"
+RemainingRPM / RemainingTPM / RemainingITPM / RemainingOTPM
+LimitRPM / LimitTPM / LimitITPM / LimitOTPM
+Reset*        time
 RetryAfter    duration
-ReservationID string   // when Allowed and tokens reserved
+ReservationID string
+OvershootTPM / OvershootITPM / OvershootOTPM
 ```
 
 ### HTTP headers (OpenAI-compatible)
@@ -303,9 +304,10 @@ On responses (allow or deny where applicable):
 | `x-ratelimit-limit-requests` | RPM ceiling |
 | `x-ratelimit-remaining-requests` | RPM remaining |
 | `x-ratelimit-reset-requests` | When RPM budget recovers enough / window reset signal |
-| `x-ratelimit-limit-tokens` | TPM ceiling |
-| `x-ratelimit-remaining-tokens` | TPM remaining |
+| `x-ratelimit-limit-tokens` | TPM ceiling (split mode: mirrors OTPM) |
+| `x-ratelimit-remaining-tokens` | TPM remaining (split mode: mirrors OTPM) |
 | `x-ratelimit-reset-tokens` | Token budget recovery signal |
+| `x-ratelimit-*-input-tokens` / `*-output-tokens` | Split-mode ITPM/OTPM (when set) |
 | `Retry-After` | Seconds to wait on 429 (minimum; clients should add jitter) |
 
 Status codes:
@@ -365,7 +367,8 @@ Non-goals stay non-goals so the repo remains adoptable.
 | Term | Meaning |
 | --- | --- |
 | RPM | Requests per minute (request bucket) |
-| TPM | Tokens per minute (token bucket; input+output unless split later) |
+| TPM | Tokens per minute (classic combined input+output bucket) |
+| ITPM / OTPM | Input / output tokens per minute (split mode; Anthropic-shaped) |
 | Subject | Authenticated identity used as rate-limit key |
 | Lease | Local chunk of budget borrowed from Redis |
 | Reservation | Held debit awaiting settle/refund after Check |
