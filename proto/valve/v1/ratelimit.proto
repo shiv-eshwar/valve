@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package valve.v1;
+
+option go_package = "github.com/shiv-eshwar/valve/pkg/gen/valve/v1;valvepb";
+
+message Key {
+  string subject = 1;
+  string model = 2;
+}
+
+message Limits {
+  int64 requests_per_minute = 1;
+  int64 tokens_per_minute = 2;
+}
+
+message Cost {
+  int64 requests = 1;
+  int64 tokens = 2;
+}
+
+message Decision {
+  bool allowed = 1;
+  string limit_type = 2;
+  int64 remaining_rpm = 3;
+  int64 remaining_tpm = 4;
+  int64 limit_rpm = 5;
+  int64 limit_tpm = 6;
+  int64 retry_after_ms = 7;
+  string reservation_id = 8;
+  int64 overshoot_tpm = 9;
+}
+
+message CheckRequest {
+  Key key = 1;
+  Limits limits = 2;
+  Cost cost = 3;
+}
+
+message CheckResponse {
+  Decision decision = 1;
+}
+
+message SettleRequest {
+  string reservation_id = 1;
+  int64 actual_tokens = 2;
+}
+
+message SettleResponse {
+  Decision decision = 1;
+}
+
+message RefundRequest {
+  string reservation_id = 1;
+}
+
+message RefundResponse {}
+
+service RateLimit {
+  rpc Check(CheckRequest) returns (CheckResponse);
+  rpc Settle(SettleRequest) returns (SettleResponse);
+  rpc Refund(RefundRequest) returns (RefundResponse);
+}

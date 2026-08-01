@@ -4,7 +4,7 @@ Dual-dimension (RPM + TPM) distributed rate limiter for LLM and API gateways.
 
 Most rate limiters count requests. LLM APIs burn **tokens**. valve enforces both with an atomic dual token-bucket, reserve → settle → refund accounting, and OpenAI-compatible decision fields.
 
-Design: [WHAT_THIS_IS.md](./WHAT_THIS_IS.md) · Progress: [engineering.md](./engineering.md)
+Design: [WHAT_THIS_IS.md](./WHAT_THIS_IS.md) · Progress: [engineering.md](./engineering.md) · HTTP API: [docs/HTTP_API.md](./docs/HTTP_API.md)
 
 ## Install
 
@@ -53,7 +53,6 @@ func main() {
 		return
 	}
 
-	// ... call model, parse usage ...
 	actual := int64(42)
 	sd, err := lim.Settle(ctx, d.ReservationID, actual)
 	if err != nil {
@@ -65,7 +64,27 @@ func main() {
 }
 ```
 
-## Fast path (Phase 2)
+## Sidecar (`valved`) + Compose
+
+```bash
+docker compose up -d --build
+curl -s http://127.0.0.1:8080/healthz
+curl -s -X POST http://127.0.0.1:8080/v1/check \
+  -H 'Content-Type: application/json' \
+  -d '{"key":{"subject":"demo","model":"gpt-4o"},"limits":{"requests_per_minute":60,"tokens_per_minute":90000},"cost":{"requests":1,"tokens":100}}'
+# Prometheus UI: http://127.0.0.1:9091  (scrapes valved /metrics)
+```
+
+Or run locally:
+
+```bash
+go run ./cmd/valved          # memory store
+REDIS_ADDR=localhost:6379 go run ./cmd/valved
+```
+
+HTTP `:8080` · gRPC `:9090` · see [docs/HTTP_API.md](./docs/HTTP_API.md).
+
+## Fast path
 
 ```go
 import "github.com/shiv-eshwar/valve/pkg/lease"
@@ -74,27 +93,17 @@ lim := limiter.New(store, limiter.WithFastPath(lease.DefaultConfig()))
 defer lim.Close(ctx)
 ```
 
-Defaults: RPM chunk `5`, TPM chunk `500`, lease TTL `2s`.
-
-```text
-unused_in_flight ≤ num_pods × chunk_size
-```
-
-## LLM proxy example (Phase 3)
+## LLM proxy example
 
 ```bash
 cd examples/openai-proxy && go run .
-# optional: REDIS_ADDR=localhost:6379 RPM=60 TPM=90000
 ```
-
-See [examples/openai-proxy/README.md](./examples/openai-proxy/README.md).
 
 ## Status
 
-- Phase 1: Correct core (`Check` / `Settle` / `Refund`, memory + Redis/Lua)
-- Phase 2: Fast path (`WithFastPath`, deny cache, lease borrow/return)
-- Phase 3: LLM ergonomics (`pkg/llm`, `pkg/headers`, openai-proxy, CI)
-- Next: Phase 4 — Ops (`valved` sidecar, Compose, Prometheus)
+- Phase 1–3: core, fast path, LLM ergonomics
+- Phase 4: `valved`, Prometheus, middleware, Compose/k8s
+- Next: Phase 5 — OSS polish (`CONTRIBUTING`, changelog, `v0.1.0`)
 
 ## License
 

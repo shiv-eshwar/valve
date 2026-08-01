@@ -1,0 +1,7 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: valved
+    static_configs:
+      - targets: ["valved:8080"]

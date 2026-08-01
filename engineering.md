@@ -11,10 +11,10 @@ Update this file whenever work lands. Do not delete remaining work — refine it
 
 | Field | Value |
 | --- | --- |
-| Phase | **3 — LLM ergonomics (complete)** |
-| Status | Estimator, headers, streaming settle, openai-proxy, GitHub Actions CI green |
+| Phase | **4 — Ops (complete)** |
+| Status | valved HTTP+gRPC, Prometheus, middleware, Compose/k8s, HTTP_API docs, CI compose smoke |
 | Last updated | 2026-08-01 |
-| Next up | Phase 4 — Ops (`valved` sidecar, Compose, Prometheus, middleware) |
+| Next up | Phase 5 — OSS polish (CONTRIBUTING, changelog, v0.1.0) |
 
 ---
 
@@ -153,15 +153,15 @@ Pulled from `WHAT_THIS_IS.md`:
 
 **Estimate:** ~2 weeks
 
-- [ ] Prometheus metrics (checks, denies by type, redis RTT, lease hit ratio, overshoot)
-- [ ] Structured deny logs (hashed subject, no raw API keys)
-- [ ] `cmd/valved` HTTP + gRPC sidecar
-- [ ] net/http middleware package
-- [ ] gRPC interceptor package
-- [ ] Docker Compose (app + Redis/Valkey)
-- [ ] Helm chart sketch or deploy manifest
-- [ ] CI: unit + integration + race detector
-- [ ] Envoy external rate limit adapter **or** documented HTTP contract for gateways
+- [x] Prometheus metrics — `pkg/metrics` (`valve_checks_total`, settle/refund, check duration, lease hit ratio, overshoot, store errors)
+- [x] Structured deny logs — `pkg/logx` (hashed subject)
+- [x] `cmd/valved` HTTP + gRPC sidecar
+- [x] net/http middleware — `pkg/middleware/http`
+- [x] gRPC interceptor — `pkg/middleware/grpc`
+- [x] Docker Compose — `docker-compose.yml` (redis + valved + prometheus)
+- [x] Deploy manifests — `deploy/k8s/`
+- [x] CI: race tests + compose smoke job
+- [x] Gateway contract — `docs/HTTP_API.md` (Envoy native adapter skipped by design)
 
 **Exit criteria:** `docker compose up` demo works; CI green; metrics visible in a local Prometheus scrape.
 
@@ -234,6 +234,8 @@ engineering.md
 | 2026-08-01 | Char/4 estimator + Tokenizer hook | Hot path stays fast; exact tiktoken optional |
 | 2026-08-01 | Headers package mirrors OpenAI names | SDK-compatible `x-ratelimit-*` |
 | 2026-08-01 | CI on Phase 3 | Strangers can verify green without tribal knowledge |
+| 2026-08-01 | HTTP-first sidecar; skip Envoy rl_service | Decision 1:1 JSON + gRPC; document gateway HTTP contract |
+| 2026-08-01 | ObservedLimiter wrapper | Keep core limiter pure; metrics opt-in |
 
 ---
 
@@ -258,7 +260,7 @@ engineering.md
 | 1 | Correct core | **Done** (2026-08-01) |
 | 2 | Fast path | **Done** (2026-08-01) |
 | 3 | LLM ergonomics | **Done** (2026-08-01) |
-| 4 | Ops / integration | Not started |
+| 4 | Ops / integration | **Done** (2026-08-01) |
 | 5 | OSS polish | Not started |
 
 ---

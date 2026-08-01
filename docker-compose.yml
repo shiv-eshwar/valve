@@ -1,0 +1,28 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  valved:
+    build: .
+    ports:
+      - "8080:8080"
+      - "9090:9090"
+    environment:
+      REDIS_ADDR: redis:6379
+      LISTEN: ":8080"
+      GRPC_LISTEN: ":9090"
+      FAST_PATH: "true"
+      FAIL_MODE: closed
+    depends_on:
+      - redis
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9091:9090"
+    depends_on:
+      - valved

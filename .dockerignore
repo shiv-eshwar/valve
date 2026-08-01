@@ -1,0 +1,6 @@
+.git
+.cursor
+**/testdata
+*.md
+!go.mod
+!go.sum
