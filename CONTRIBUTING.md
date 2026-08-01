@@ -57,14 +57,15 @@ make compose-smoke
 
 ## Good first issues
 
-| Idea | Area |
-| --- | --- |
-| Thin **Python** client for `docs/HTTP_API.md` | examples |
-| **Gin** / Echo middleware wrapper around `pkg/middleware/http` | middleware |
-| Split **ITPM / OTPM** (Anthropic-shaped) buckets | core |
-| Grafana dashboard JSON scraping `valve_*` metrics | ops |
-| Documented sticky-routing notes for hot org keys | docs |
-| Example against **vLLM** OpenAI-compatible server | examples |
+| Idea | Area | Status |
+| --- | --- | --- |
+| Thin **Python** client for `docs/HTTP_API.md` | examples | Done — [`examples/python-client/`](./examples/python-client/) |
+| **Gin** middleware wrapper around `pkg/middleware/http` | middleware | Done — [`examples/gin-ratelimit/`](./examples/gin-ratelimit/) |
+| Grafana dashboard JSON scraping `valve_*` metrics | ops | Done — [`deploy/grafana/`](./deploy/grafana/) |
+| Documented sticky-routing notes for hot org keys | docs | Done — [`docs/STICKY_ROUTING.md`](./docs/STICKY_ROUTING.md) |
+| Split **ITPM / OTPM** (Anthropic-shaped) buckets | core | Open |
+| **Echo** middleware wrapper (mirror Gin example) | middleware | Open |
+| Example against **vLLM** OpenAI-compatible server | examples | Open |
 
 ## Code of conduct
 
