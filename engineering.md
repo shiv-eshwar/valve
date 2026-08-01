@@ -11,10 +11,10 @@ Update this file whenever work lands. Do not delete remaining work — refine it
 
 | Field | Value |
 | --- | --- |
-| Phase | **1 — Correct core (complete)** |
-| Status | Dual-bucket Check/Settle/Refund live (memory + Redis/Lua); `go test ./... -race` green |
+| Phase | **2 — Fast path (complete)** |
+| Status | L0 deny cache + L1 lease borrow (`WithFastPath`); hit-ratio + overshoot tests green |
 | Last updated | 2026-08-01 |
-| Next up | Phase 2 — Fast path (L0 deny cache, L1 local lease, benches) |
+| Next up | Phase 3 — LLM ergonomics (estimator, headers, proxy example) |
 
 ---
 
@@ -105,14 +105,14 @@ Pulled from `WHAT_THIS_IS.md`:
 
 **Estimate:** ~2 weeks
 
-- [ ] L0 in-process deny cache (subject → not-before time)
-- [ ] L1 local lease / chunk borrow for RPM + TPM
-- [ ] Lease TTL + refresh path
-- [ ] Best-effort lease return on shutdown
-- [ ] Document overshoot bound: `pods × chunk_size`
-- [ ] Benchmarks: local hit, Redis hit, lease hit ratio
-- [ ] Redis Cluster hash tags `{subject}`
-- [ ] Connection pool + `EVALSHA` load/fallback
+- [x] L0 in-process deny cache (subject → not-before time) — `pkg/lease`
+- [x] L1 local lease / chunk borrow for RPM + TPM — `Borrow`/`Return` + `WithFastPath`
+- [x] Lease TTL + refresh path (default 2s; defaults RPM chunk 5, TPM chunk 500)
+- [x] Best-effort lease return on shutdown — `Limiter.Close`
+- [x] Document overshoot bound: unused in-flight lease ≤ `pods × chunk`; allows ≤ global (borrow debits Redis)
+- [x] Benchmarks: `BenchmarkCheck_Direct` vs `BenchmarkCheck_FastPath`; hit-ratio test ≥ 80%
+- [x] Redis Cluster hash tags `{subject}` — already in Phase 1 keys
+- [x] `EVALSHA` via go-redis `Script.Run` + `Script.Load` warm on `redisstore.New`
 
 **Exit criteria:** Bench proves ~majority local hits; p99 local &lt; 50 µs in lab; overshoot formula documented and tested at small N.
 
@@ -195,8 +195,9 @@ Pulled from `WHAT_THIS_IS.md`:
 cmd/valved/           # sidecar
 pkg/bucket/               # token bucket + dual check math
 pkg/store/memory/
-pkg/store/redis/          # Lua scripts, EVALSHA
-pkg/lease/                # local chunk cache
+pkg/store/redis/          # Lua scripts, EVALSHA, borrow/return
+pkg/lease/                # deny cache + local chunk lease (Phase 2)
+pkg/limiter/              # facade + WithFastPath
 pkg/llm/                  # estimate + settle helpers
 pkg/middleware/http/
 pkg/middleware/grpc/
@@ -223,6 +224,9 @@ engineering.md
 | 2026-08-01 | miniredis for Redis tests | No host Redis required; Lua + TIME covered in CI |
 | 2026-08-01 | Hash tags in Phase 1 keys | `rl:{{{subject}}}:...` avoids key rewrite in Phase 2 |
 | 2026-08-01 | Limits passed on Check | Capacity = per-minute budget; refill = budget/60 |
+| 2026-08-01 | Fast path opt-in via `WithFastPath` | Keeps Phase 1 exact tests; gateway enables leases explicitly |
+| 2026-08-01 | Borrow debits Redis before local spend | Global allows ≤ capacity; overshoot is unused lease credits ≤ N×chunk |
+| 2026-08-01 | Fail-open + fast path = lease-only | No invented allows when store is down and lease empty |
 
 ---
 
@@ -230,12 +234,12 @@ engineering.md
 
 | Risk | Impact | Mitigation / when |
 | --- | --- | --- |
-| Lease overshoot under many pods | Users briefly exceed quota | Bound chunk size; document formula; Phase 2 tests |
+| Lease unused credits under many pods | Temporary budget held off Redis until Close/TTL | Chunk defaults small; `Close` returns; documented |
 | Tokenizer cost on hot path | Limiter slower than API | Fast estimate only on Check; Phase 3 |
 | Streaming without final usage | Stuck reservations | Timeout + refund/settle policy; Phase 3 |
-| Redis hot keys (huge tenants) | Latency spikes | Finer keying / sticky routing; Phase 2–4 |
+| Redis hot keys (huge tenants) | Latency spikes | Finer keying / sticky routing; Phase 4 |
 | Multi-region double budget | 2× usage if multi-home | Document; CRDT/active-active only as later phase |
-| Deny cache vs refund race | False deny after refund | Short TTL or invalidate on credit; Phase 2 note |
+| Deny cache vs refund race | False deny after refund | Cleared on Settle credit / Refund (Phase 2) |
 
 ---
 
@@ -245,7 +249,7 @@ engineering.md
 | --- | --- | --- |
 | 0 | Spec / docs | **Done** |
 | 1 | Correct core | **Done** (2026-08-01) |
-| 2 | Fast path | Not started |
+| 2 | Fast path | **Done** (2026-08-01) |
 | 3 | LLM ergonomics | Not started |
 | 4 | Ops / integration | Not started |
 | 5 | OSS polish | Not started |

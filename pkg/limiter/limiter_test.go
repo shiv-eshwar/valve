@@ -7,6 +7,7 @@ import (
 
 	"github.com/shiv-eshwar/valve/pkg/api"
 	"github.com/shiv-eshwar/valve/pkg/limiter"
+	"github.com/shiv-eshwar/valve/pkg/store"
 	"github.com/shiv-eshwar/valve/pkg/store/memory"
 )
 
@@ -19,6 +20,12 @@ func (errStore) Settle(context.Context, string, int64) (api.Decision, error) {
 	return api.Decision{}, errors.New("boom")
 }
 func (errStore) Refund(context.Context, string) error { return errors.New("boom") }
+func (errStore) Borrow(context.Context, api.Key, api.Limits, int64, int64, int64, int64) (store.BorrowResult, error) {
+	return store.BorrowResult{}, errors.New("boom")
+}
+func (errStore) Return(context.Context, api.Key, api.Limits, int64, int64) error {
+	return errors.New("boom")
+}
 
 func TestFailClosed(t *testing.T) {
 	lim := limiter.New(errStore{}, limiter.WithFailMode(api.FailClosed))

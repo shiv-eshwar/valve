@@ -234,6 +234,108 @@ func (s *Store) Settle(_ context.Context, reservationID string, actualTokens int
 	return dec, nil
 }
 
+// Borrow implements store.Store.
+func (s *Store) Borrow(_ context.Context, key api.Key, limits api.Limits, minRPM, minTPM, chunkRPM, chunkTPM int64) (store.BorrowResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	nowMs := s.now().UnixMilli()
+	if key.Subject == "" {
+		return store.BorrowResult{}, errInvalid("subject required")
+	}
+	if minRPM < 0 {
+		minRPM = 0
+	}
+	if minTPM < 0 {
+		minTPM = 0
+	}
+	if chunkRPM < 0 {
+		chunkRPM = 0
+	}
+	if chunkTPM < 0 {
+		chunkTPM = 0
+	}
+
+	bk := bucketKey(key)
+	rpm := loadBucket(s.rpm, bk, limits.RequestsPerMinute, nowMs)
+	tpm := loadBucket(s.tpm, bk, limits.TokensPerMinute, nowMs)
+	availRPM := bucket.RemainingInt(rpm.Tokens)
+	availTPM := bucket.RemainingInt(tpm.Tokens)
+
+	out := store.BorrowResult{
+		LimitRPM:     limits.RequestsPerMinute,
+		LimitTPM:     limits.TokensPerMinute,
+		RemainingRPM: availRPM,
+		RemainingTPM: availTPM,
+	}
+
+	if availRPM < minRPM {
+		_, res := bucket.TryConsume(rpm, nowMs, minRPM)
+		out.Allowed = false
+		out.LimitType = api.LimitTypeRequests
+		out.RetryAfter = res.RetryAfter
+		return out, nil
+	}
+	if availTPM < minTPM {
+		_, res := bucket.TryConsume(tpm, nowMs, minTPM)
+		out.Allowed = false
+		out.LimitType = api.LimitTypeTokens
+		out.RetryAfter = res.RetryAfter
+		return out, nil
+	}
+
+	wantRPM := minRPM
+	if chunkRPM > wantRPM {
+		wantRPM = chunkRPM
+	}
+	wantTPM := minTPM
+	if chunkTPM > wantTPM {
+		wantTPM = chunkTPM
+	}
+	gotRPM := availRPM
+	if wantRPM < gotRPM {
+		gotRPM = wantRPM
+	}
+	gotTPM := availTPM
+	if wantTPM < gotTPM {
+		gotTPM = wantTPM
+	}
+
+	rpm2, _ := bucket.TryConsume(rpm, nowMs, gotRPM)
+	tpm2, _ := bucket.TryConsume(tpm, nowMs, gotTPM)
+	saveBucket(s.rpm, bk, rpm2)
+	saveBucket(s.tpm, bk, tpm2)
+
+	out.Allowed = true
+	out.GotRPM = gotRPM
+	out.GotTPM = gotTPM
+	out.RemainingRPM = bucket.RemainingInt(rpm2.Tokens)
+	out.RemainingTPM = bucket.RemainingInt(tpm2.Tokens)
+	return out, nil
+}
+
+// Return implements store.Store.
+func (s *Store) Return(_ context.Context, key api.Key, limits api.Limits, rpmAdd, tpmAdd int64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if key.Subject == "" {
+		return errInvalid("subject required")
+	}
+	if rpmAdd <= 0 && tpmAdd <= 0 {
+		return nil
+	}
+	nowMs := s.now().UnixMilli()
+	bk := bucketKey(key)
+	rpm := loadBucket(s.rpm, bk, limits.RequestsPerMinute, nowMs)
+	tpm := loadBucket(s.tpm, bk, limits.TokensPerMinute, nowMs)
+	rpm = bucket.Credit(rpm, nowMs, rpmAdd)
+	tpm = bucket.Credit(tpm, nowMs, tpmAdd)
+	saveBucket(s.rpm, bk, rpm)
+	saveBucket(s.tpm, bk, tpm)
+	return nil
+}
+
 // Refund implements store.Store.
 func (s *Store) Refund(_ context.Context, reservationID string) error {
 	s.mu.Lock()

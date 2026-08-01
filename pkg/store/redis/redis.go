@@ -24,22 +24,41 @@ var settleLua string
 //go:embed lua/refund.lua
 var refundLua string
 
+//go:embed lua/borrow.lua
+var borrowLua string
+
+//go:embed lua/return.lua
+var returnLua string
+
 // Store is a Redis/Valkey-backed dual-bucket store.
 type Store struct {
 	rdb    redis.Cmdable
 	check  *redis.Script
 	settle *redis.Script
 	refund *redis.Script
+	borrow *redis.Script
+	ret    *redis.Script
 }
 
 // New wraps a go-redis client/cluster client.
+// Scripts are loaded via EVALSHA (go-redis Script.Run); Load warms SHA cache when possible.
 func New(rdb redis.Cmdable) *Store {
-	return &Store{
+	s := &Store{
 		rdb:    rdb,
 		check:  redis.NewScript(checkLua),
 		settle: redis.NewScript(settleLua),
 		refund: redis.NewScript(refundLua),
+		borrow: redis.NewScript(borrowLua),
+		ret:    redis.NewScript(returnLua),
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_ = s.check.Load(ctx, rdb)
+	_ = s.settle.Load(ctx, rdb)
+	_ = s.refund.Load(ctx, rdb)
+	_ = s.borrow.Load(ctx, rdb)
+	_ = s.ret.Load(ctx, rdb)
+	return s
 }
 
 func modelOrDash(model string) string {
@@ -131,6 +150,56 @@ func (s *Store) Refund(ctx context.Context, reservationID string) error {
 		int(store.ReservationTTL.Seconds()),
 	).Result()
 	return mapResErr(err)
+}
+
+// Borrow implements store.Store.
+func (s *Store) Borrow(ctx context.Context, key api.Key, limits api.Limits, minRPM, minTPM, chunkRPM, chunkTPM int64) (store.BorrowResult, error) {
+	if key.Subject == "" {
+		return store.BorrowResult{}, errors.New("valve: subject required")
+	}
+	rpmKey, tpmKey := bucketKeys(key)
+	raw, err := s.borrow.Run(ctx, s.rdb,
+		[]string{rpmKey, tpmKey},
+		limits.RequestsPerMinute,
+		limits.TokensPerMinute,
+		minRPM, minTPM, chunkRPM, chunkTPM,
+	).Result()
+	if err != nil {
+		return store.BorrowResult{}, err
+	}
+	arr, ok := raw.([]any)
+	if !ok || len(arr) < 7 {
+		return store.BorrowResult{}, fmt.Errorf("valve: unexpected borrow response %#v", raw)
+	}
+	return store.BorrowResult{
+		Allowed:      toInt64(arr[0]) == 1,
+		LimitType:    api.LimitType(toString(arr[1])),
+		GotRPM:       toInt64(arr[2]),
+		GotTPM:       toInt64(arr[3]),
+		RemainingRPM: toInt64(arr[4]),
+		RemainingTPM: toInt64(arr[5]),
+		RetryAfter:   time.Duration(toInt64(arr[6])) * time.Millisecond,
+		LimitRPM:     limits.RequestsPerMinute,
+		LimitTPM:     limits.TokensPerMinute,
+	}, nil
+}
+
+// Return implements store.Store.
+func (s *Store) Return(ctx context.Context, key api.Key, limits api.Limits, rpm, tpm int64) error {
+	if key.Subject == "" {
+		return errors.New("valve: subject required")
+	}
+	if rpm <= 0 && tpm <= 0 {
+		return nil
+	}
+	rpmKey, tpmKey := bucketKeys(key)
+	_, err := s.ret.Run(ctx, s.rdb,
+		[]string{rpmKey, tpmKey},
+		limits.RequestsPerMinute,
+		limits.TokensPerMinute,
+		rpm, tpm,
+	).Result()
+	return err
 }
 
 func mapResErr(err error) error {

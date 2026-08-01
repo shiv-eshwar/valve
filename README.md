@@ -53,9 +53,32 @@ func main() {
 }
 ```
 
-## Phase 1 status
+## Fast path (Phase 2)
 
-Correct core: `Check` / `Settle` / `Refund`, in-memory + Redis/Lua stores, fail-closed/open. Local leases and sidecar land in later phases — see [engineering.md](./engineering.md).
+Opt in to L0 deny cache + L1 local lease borrowing so most Checks never hit Redis:
+
+```go
+import "github.com/shiv-eshwar/valve/pkg/lease"
+
+lim := limiter.New(store, limiter.WithFastPath(lease.DefaultConfig()))
+defer lim.Close(ctx) // best-effort return unused lease credits
+```
+
+Defaults: RPM chunk `5`, TPM chunk `500`, lease TTL `2s`.
+
+**Overshoot:** Borrow debits the shared store first, so total allows cannot exceed the global budget (without refill). Unused credits held in-process across pods are bounded by:
+
+```text
+unused_in_flight ≤ num_pods × chunk_size
+```
+
+Call `Close` on shutdown to return leftovers. See [WHAT_THIS_IS.md](./WHAT_THIS_IS.md) and [engineering.md](./engineering.md).
+
+## Status
+
+- Phase 1: Correct core (`Check` / `Settle` / `Refund`, memory + Redis/Lua)
+- Phase 2: Fast path (`WithFastPath`, deny cache, lease borrow/return, benches)
+- Next: Phase 3 — LLM ergonomics (estimator, OpenAI headers, proxy example)
 
 ## License
 
