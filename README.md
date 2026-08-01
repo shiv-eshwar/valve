@@ -1,16 +1,54 @@
 # valve
 
-Dual-dimension (RPM + TPM) distributed rate limiter for LLM and API gateways.
+[![CI](https://github.com/shiv-eshwar/valve/actions/workflows/ci.yml/badge.svg)](https://github.com/shiv-eshwar/valve/actions/workflows/ci.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/shiv-eshwar/valve.svg)](https://pkg.go.dev/github.com/shiv-eshwar/valve)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 
-Most rate limiters count requests. LLM APIs burn **tokens**. valve enforces both with an atomic dual token-bucket, reserve → settle → refund accounting, and OpenAI-compatible decision fields.
+**Dual-dimension (RPM + TPM) rate limiting for LLM and API gateways** — atomic token buckets, reserve → settle → refund, local lease fast path, OpenAI-compatible headers, Go library + `valved` sidecar.
 
-Design: [WHAT_THIS_IS.md](./WHAT_THIS_IS.md) · Progress: [engineering.md](./engineering.md) · HTTP API: [docs/HTTP_API.md](./docs/HTTP_API.md)
+Most rate limiters count requests. LLM APIs burn **tokens**. valve meters both.
+
+| Doc | |
+| --- | --- |
+| Design | [WHAT_THIS_IS.md](./WHAT_THIS_IS.md) |
+| Progress | [engineering.md](./engineering.md) |
+| HTTP API | [docs/HTTP_API.md](./docs/HTTP_API.md) |
+| Benchmarks | [docs/BENCHMARKS.md](./docs/BENCHMARKS.md) |
+| Contributing | [CONTRIBUTING.md](./CONTRIBUTING.md) |
+| Security | [SECURITY.md](./SECURITY.md) |
+| Changelog | [CHANGELOG.md](./CHANGELOG.md) |
+
+## Features
+
+- **RPM + TPM** dual token-bucket, all-or-nothing Check
+- **Reserve → Settle → Refund** for unknown LLM output tokens
+- **Fast path**: in-process deny cache + local lease chunks (opt-in)
+- **OpenAI-compatible** `x-ratelimit-*` headers
+- **Library + sidecar** (`valved` HTTP/gRPC) for any language
+- **Prometheus** metrics, structured deny logs (hashed subject)
+- Redis/Valkey Lua + in-memory store for tests
+
+## When to use / when not
+
+**Use valve when** you proxy or serve LLM APIs and need per-tenant RPM and TPM, or you want OpenAI-shaped limits in your own gateway.
+
+**Do not use valve as** a full API gateway, billing ledger, tokenizer product, or strongly consistent global multi-region quota system. See [What this is not](./WHAT_THIS_IS.md#what-this-is-not).
+
+## Latency targets (SLOs)
+
+| Path | Target |
+| --- | --- |
+| L0/L1 local allow/deny (fast path) | p99 &lt; 50 µs (lab) |
+| L2 Redis/Lua Check | p99 &lt; 1–2 ms (same AZ) |
+| Overshoot (unused lease credits) | ≤ `num_pods × chunk_size` |
 
 ## Install
 
 ```bash
-go get github.com/shiv-eshwar/valve@latest
+go get github.com/shiv-eshwar/valve@v0.1.0
 ```
+
+Requires Go 1.24+.
 
 ## Quick example
 
@@ -72,17 +110,15 @@ curl -s http://127.0.0.1:8080/healthz
 curl -s -X POST http://127.0.0.1:8080/v1/check \
   -H 'Content-Type: application/json' \
   -d '{"key":{"subject":"demo","model":"gpt-4o"},"limits":{"requests_per_minute":60,"tokens_per_minute":90000},"cost":{"requests":1,"tokens":100}}'
-# Prometheus UI: http://127.0.0.1:9091  (scrapes valved /metrics)
+# Prometheus: http://127.0.0.1:9091
 ```
 
-Or run locally:
-
 ```bash
-go run ./cmd/valved          # memory store
+go run ./cmd/valved
 REDIS_ADDR=localhost:6379 go run ./cmd/valved
 ```
 
-HTTP `:8080` · gRPC `:9090` · see [docs/HTTP_API.md](./docs/HTTP_API.md).
+HTTP `:8080` · gRPC `:9090`
 
 ## Fast path
 
@@ -93,18 +129,23 @@ lim := limiter.New(store, limiter.WithFastPath(lease.DefaultConfig()))
 defer lim.Close(ctx)
 ```
 
+Defaults: RPM chunk `5`, TPM chunk `500`, lease TTL `2s`.
+
 ## LLM proxy example
 
 ```bash
 cd examples/openai-proxy && go run .
 ```
 
-## Status
+## Develop
 
-- Phase 1–3: core, fast path, LLM ergonomics
-- Phase 4: `valved`, Prometheus, middleware, Compose/k8s
-- Next: Phase 5 — OSS polish (`CONTRIBUTING`, changelog, `v0.1.0`)
+```bash
+go test ./... -race
+go test ./pkg/limiter -bench='Benchmark(Naive|Valve)' -benchmem
+```
+
+See [docs/BENCHMARKS.md](./docs/BENCHMARKS.md) for sample numbers.
 
 ## License
 
-MIT
+MIT — see [LICENSE](./LICENSE).

@@ -11,10 +11,10 @@ Update this file whenever work lands. Do not delete remaining work — refine it
 
 | Field | Value |
 | --- | --- |
-| Phase | **4 — Ops (complete)** |
-| Status | valved HTTP+gRPC, Prometheus, middleware, Compose/k8s, HTTP_API docs, CI compose smoke |
+| Phase | **5 — OSS polish (complete)** |
+| Status | Launch-ready: README SLOs, CONTRIBUTING/SECURITY/CHANGELOG, comparative benches, local tag `v0.1.0` |
 | Last updated | 2026-08-01 |
-| Next up | Phase 5 — OSS polish (CONTRIBUTING, changelog, v0.1.0) |
+| Next up | Publish: `git push origin main` and `git push origin v0.1.0` (for pkg.go.dev) |
 
 ---
 
@@ -178,13 +178,13 @@ Pulled from `WHAT_THIS_IS.md`:
 
 **Estimate:** ~1–2 weeks
 
-- [ ] README with quickstart, SLOs, and link to `WHAT_THIS_IS.md`
-- [ ] LICENSE (MIT or Apache-2.0)
-- [ ] CONTRIBUTING.md + good first issues
-- [ ] Comparative benchmarks vs naive INCR and single-bucket libs
-- [ ] “When to use this” / “when not to” (pointer to What this is not)
-- [ ] Versioned module tag `v0.1.0`
-- [ ] Changelog
+- [x] README with quickstart, SLOs, and link to `WHAT_THIS_IS.md`
+- [x] LICENSE (MIT)
+- [x] CONTRIBUTING.md + good first issues
+- [x] Comparative benchmarks vs naive fixed-window (`pkg/limiter/compare_bench_test.go` + `docs/BENCHMARKS.md`)
+- [x] “When to use this” / “when not to” (pointer to What this is not)
+- [x] Versioned module tag `v0.1.0` (local annotated tag; push with `git push origin v0.1.0`)
+- [x] Changelog + SECURITY.md
 
 **Exit criteria:** Cold contributor can run tests and understand scope in one sitting.
 
@@ -236,6 +236,8 @@ engineering.md
 | 2026-08-01 | CI on Phase 3 | Strangers can verify green without tribal knowledge |
 | 2026-08-01 | HTTP-first sidecar; skip Envoy rl_service | Decision 1:1 JSON + gRPC; document gateway HTTP contract |
 | 2026-08-01 | ObservedLimiter wrapper | Keep core limiter pure; metrics opt-in |
+| 2026-08-01 | MIT confirmed for v0.1.0 | Already in LICENSE; OSS default for library + sidecar |
+| 2026-08-01 | v0.1.0 scope = Phases 1–4 + polish | Dual-bucket, fast path, LLM helpers, valved, docs; no Envoy/Helm/CRDT |
 
 ---
 
@@ -261,7 +263,7 @@ engineering.md
 | 2 | Fast path | **Done** (2026-08-01) |
 | 3 | LLM ergonomics | **Done** (2026-08-01) |
 | 4 | Ops / integration | **Done** (2026-08-01) |
-| 5 | OSS polish | Not started |
+| 5 | OSS polish | **Done** (2026-08-01) |
 
 ---
 
