@@ -12,9 +12,9 @@ Update this file whenever work lands. Do not delete remaining work — refine it
 | Field | Value |
 | --- | --- |
 | Phase | **5 — OSS polish (complete)** |
-| Status | Launch-ready: README SLOs, CONTRIBUTING/SECURITY/CHANGELOG, comparative benches, local tag `v0.1.0` |
+| Status | **Published** `v0.1.0` — community docs, issue/PR templates, Code of Conduct, GitHub Release |
 | Last updated | 2026-08-01 |
-| Next up | Publish: `git push origin main` and `git push origin v0.1.0` (for pkg.go.dev) |
+| Next up | Community feedback; patch releases as needed (`v0.1.x`) |
 
 ---
 

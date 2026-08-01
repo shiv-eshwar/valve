@@ -21,6 +21,7 @@ First public release of **valve**: dual-dimension (RPM + TPM) rate limiting for 
 - net/http middleware and gRPC unary interceptor
 - Docker Compose (redis + valved + prometheus) and Kubernetes manifests
 - Design docs (`WHAT_THIS_IS.md`), HTTP API docs, CI (race + compose smoke)
+- Community: CONTRIBUTING, SECURITY, CODE_OF_CONDUCT, issue/PR templates
 
 ### Security
 

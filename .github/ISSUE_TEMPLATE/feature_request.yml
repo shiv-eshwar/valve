@@ -1,0 +1,25 @@
+name: Feature request
+description: Propose an enhancement aligned with WHAT_THIS_IS.md
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What limitation are you hitting?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: Ideal API or behavior. Link design docs if relevant.
+    validations:
+      required: true
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      options:
+        - label: This is not a full API gateway / billing / tokenizer product (see WHAT_THIS_IS.md)
+          required: true

@@ -1,0 +1,43 @@
+name: Bug report
+description: Report incorrect rate-limit behavior or a crash
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve valve. Search existing issues first.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Expected vs actual behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: Minimal Go snippet, `valved` config, or curl against the HTTP API.
+      render: go
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Module tag or commit (e.g. v0.1.0).
+      placeholder: v0.1.0
+    validations:
+      required: true
+  - type: dropdown
+    id: store
+    attributes:
+      label: Store / path
+      options:
+        - memory
+        - redis / valkey
+        - fast path (WithFastPath)
+        - valved sidecar
+        - unsure
+    validations:
+      required: true

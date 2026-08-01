@@ -2,6 +2,8 @@
 
 Thanks for helping make dual-dimension rate limiting better.
 
+By participating, you agree to follow our [Code of Conduct](./CODE_OF_CONDUCT.md).
+
 ## Prerequisites
 
 - Go **1.24+**

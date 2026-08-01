@@ -15,8 +15,10 @@ Most rate limiters count requests. LLM APIs burn **tokens**. valve meters both.
 | HTTP API | [docs/HTTP_API.md](./docs/HTTP_API.md) |
 | Benchmarks | [docs/BENCHMARKS.md](./docs/BENCHMARKS.md) |
 | Contributing | [CONTRIBUTING.md](./CONTRIBUTING.md) |
+| Code of Conduct | [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) |
 | Security | [SECURITY.md](./SECURITY.md) |
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
+| Releases | [GitHub Releases](https://github.com/shiv-eshwar/valve/releases) |
 
 ## Features
 
