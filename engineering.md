@@ -11,10 +11,10 @@ Update this file whenever work lands. Do not delete remaining work — refine it
 
 | Field | Value |
 | --- | --- |
-| Phase | **2 — Fast path (complete)** |
-| Status | L0 deny cache + L1 lease borrow (`WithFastPath`); hit-ratio + overshoot tests green |
+| Phase | **3 — LLM ergonomics (complete)** |
+| Status | Estimator, headers, streaming settle, openai-proxy, GitHub Actions CI green |
 | Last updated | 2026-08-01 |
-| Next up | Phase 3 — LLM ergonomics (estimator, headers, proxy example) |
+| Next up | Phase 4 — Ops (`valved` sidecar, Compose, Prometheus, middleware) |
 
 ---
 
@@ -129,13 +129,14 @@ Pulled from `WHAT_THIS_IS.md`:
 
 **Estimate:** ~2 weeks
 
-- [ ] Fast token estimator (chars/4 or similar) with documented error bound
-- [ ] Optional exact tokenizer hook interface (tiktoken-class; not required on hot path)
-- [ ] Per-request max token/size gate (`400`/`413`) before Check
-- [ ] OpenAI-compatible response headers helper
-- [ ] Example: reverse proxy in front of OpenAI or vLLM
-- [ ] Streaming settle path (wait for final `usage` / timeout)
-- [ ] Estimate vs actual mismatch metrics
+- [x] Fast token estimator (chars/4) with documented error bound — `pkg/llm`
+- [x] Optional exact tokenizer hook interface — `llm.Tokenizer`
+- [x] Per-request max token/size gate — `llm.Gate` → HTTP 413 in proxy
+- [x] OpenAI-compatible response headers helper — `pkg/headers`
+- [x] Example: reverse proxy — `examples/openai-proxy`
+- [x] Streaming settle path (SSE usage parse + settle timeout)
+- [x] Estimate vs actual mismatch metrics — `llm.Metrics` atomics
+- [x] Minimal GitHub Actions CI (`go test ./... -race`)
 
 **Exit criteria:** Example proxy enforces RPM+TPM; headers match contract; streaming settle covered by tests.
 
@@ -198,7 +199,10 @@ pkg/store/memory/
 pkg/store/redis/          # Lua scripts, EVALSHA, borrow/return
 pkg/lease/                # deny cache + local chunk lease (Phase 2)
 pkg/limiter/              # facade + WithFastPath
-pkg/llm/                  # estimate + settle helpers
+pkg/llm/                  # estimate, gate, usage/SSE, mismatch metrics
+pkg/headers/              # OpenAI-compatible response headers
+examples/openai-proxy/    # runnable reverse proxy
+.github/workflows/ci.yml
 pkg/middleware/http/
 pkg/middleware/grpc/
 proto/                    # optional gRPC
@@ -227,6 +231,9 @@ engineering.md
 | 2026-08-01 | Fast path opt-in via `WithFastPath` | Keeps Phase 1 exact tests; gateway enables leases explicitly |
 | 2026-08-01 | Borrow debits Redis before local spend | Global allows ≤ capacity; overshoot is unused lease credits ≤ N×chunk |
 | 2026-08-01 | Fail-open + fast path = lease-only | No invented allows when store is down and lease empty |
+| 2026-08-01 | Char/4 estimator + Tokenizer hook | Hot path stays fast; exact tiktoken optional |
+| 2026-08-01 | Headers package mirrors OpenAI names | SDK-compatible `x-ratelimit-*` |
+| 2026-08-01 | CI on Phase 3 | Strangers can verify green without tribal knowledge |
 
 ---
 
@@ -250,7 +257,7 @@ engineering.md
 | 0 | Spec / docs | **Done** |
 | 1 | Correct core | **Done** (2026-08-01) |
 | 2 | Fast path | **Done** (2026-08-01) |
-| 3 | LLM ergonomics | Not started |
+| 3 | LLM ergonomics | **Done** (2026-08-01) |
 | 4 | Ops / integration | Not started |
 | 5 | OSS polish | Not started |
 

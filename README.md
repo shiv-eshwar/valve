@@ -20,9 +20,12 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	"github.com/shiv-eshwar/valve/pkg/api"
+	"github.com/shiv-eshwar/valve/pkg/headers"
 	"github.com/shiv-eshwar/valve/pkg/limiter"
+	"github.com/shiv-eshwar/valve/pkg/llm"
 	"github.com/shiv-eshwar/valve/pkg/store/memory"
 )
 
@@ -30,55 +33,68 @@ func main() {
 	ctx := context.Background()
 	lim := limiter.New(memory.New())
 
-	key := api.Key{Subject: "org_123", Model: "gpt-4o"}
-	limits := api.Limits{RequestsPerMinute: 60, TokensPerMinute: 90_000}
-	cost := api.Cost{Requests: 1, Tokens: 1_200}
-
-	d, err := lim.Check(ctx, key, limits, cost)
+	body := []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"hello"}],"max_tokens":100}`)
+	est, err := llm.EstimateChatRequest(body, nil)
 	if err != nil {
 		panic(err)
 	}
+
+	key := api.Key{Subject: "org_123", Model: "gpt-4o"}
+	limits := api.Limits{RequestsPerMinute: 60, TokensPerMinute: 90_000}
+	d, err := lim.Check(ctx, key, limits, api.Cost{Requests: 1, Tokens: est.TotalTokens})
+	if err != nil {
+		panic(err)
+	}
+
+	h := make(http.Header)
+	headers.Write(h, d)
 	if !d.Allowed {
-		fmt.Println("denied:", d.LimitType, "retry after", d.RetryAfter)
+		fmt.Println("denied:", d.LimitType, h.Get("Retry-After"))
 		return
 	}
 
-	// ... call your model, then settle with real usage ...
-	actual := int64(980)
-	_, err = lim.Settle(ctx, d.ReservationID, actual)
+	// ... call model, parse usage ...
+	actual := int64(42)
+	sd, err := lim.Settle(ctx, d.ReservationID, actual)
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("ok; remaining TPM", d.RemainingTPM)
+	llm.RecordSettle(est.TotalTokens, actual)
+	headers.Write(h, sd)
+	fmt.Println("ok; remaining TPM", sd.RemainingTPM)
 }
 ```
 
 ## Fast path (Phase 2)
 
-Opt in to L0 deny cache + L1 local lease borrowing so most Checks never hit Redis:
-
 ```go
 import "github.com/shiv-eshwar/valve/pkg/lease"
 
 lim := limiter.New(store, limiter.WithFastPath(lease.DefaultConfig()))
-defer lim.Close(ctx) // best-effort return unused lease credits
+defer lim.Close(ctx)
 ```
 
 Defaults: RPM chunk `5`, TPM chunk `500`, lease TTL `2s`.
-
-**Overshoot:** Borrow debits the shared store first, so total allows cannot exceed the global budget (without refill). Unused credits held in-process across pods are bounded by:
 
 ```text
 unused_in_flight ≤ num_pods × chunk_size
 ```
 
-Call `Close` on shutdown to return leftovers. See [WHAT_THIS_IS.md](./WHAT_THIS_IS.md) and [engineering.md](./engineering.md).
+## LLM proxy example (Phase 3)
+
+```bash
+cd examples/openai-proxy && go run .
+# optional: REDIS_ADDR=localhost:6379 RPM=60 TPM=90000
+```
+
+See [examples/openai-proxy/README.md](./examples/openai-proxy/README.md).
 
 ## Status
 
 - Phase 1: Correct core (`Check` / `Settle` / `Refund`, memory + Redis/Lua)
-- Phase 2: Fast path (`WithFastPath`, deny cache, lease borrow/return, benches)
-- Next: Phase 3 — LLM ergonomics (estimator, OpenAI headers, proxy example)
+- Phase 2: Fast path (`WithFastPath`, deny cache, lease borrow/return)
+- Phase 3: LLM ergonomics (`pkg/llm`, `pkg/headers`, openai-proxy, CI)
+- Next: Phase 4 — Ops (`valved` sidecar, Compose, Prometheus)
 
 ## License
 
