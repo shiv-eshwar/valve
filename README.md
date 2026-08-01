@@ -47,6 +47,16 @@ Most rate limiters count requests. LLM APIs burn **tokens**. valve meters both.
 | L2 Redis/Lua Check | p99 &lt; 1–2 ms (same AZ) |
 | Overshoot (unused lease credits) | ≤ `num_pods × chunk_size` |
 
+## Cold start (anyone)
+
+```bash
+git clone https://github.com/shiv-eshwar/valve.git
+cd valve
+go test ./... -race          # library + sidecar tests
+docker compose up -d --build # redis + valved + prometheus (optional)
+curl -sf http://127.0.0.1:8080/healthz
+```
+
 ## Install
 
 ```bash
