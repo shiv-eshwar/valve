@@ -4,9 +4,11 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/shiv-eshwar/valve.svg)](https://pkg.go.dev/github.com/shiv-eshwar/valve)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 
-**Dual-dimension (RPM + TPM) rate limiting for LLM and API gateways** — atomic token buckets, reserve → settle → refund, local lease fast path, OpenAI-compatible headers, Go library + `valved` sidecar.
+**Rate-limit any LLM or SLM API by requests and tokens** — not just OpenAI.
 
-Most rate limiters count requests. LLM APIs burn **tokens**. valve meters both.
+valve sits in front of hosted providers, open-source servers (vLLM, Ollama, TGI, …), or your own model HTTP API. It meters **RPM + token budgets** with reserve → settle → refund, so variable prompt/completion cost does not break fair tenancy.
+
+Most rate limiters count requests. Model APIs burn **tokens**. valve meters both.
 
 | Doc | |
 | --- | --- |
@@ -22,20 +24,35 @@ Most rate limiters count requests. LLM APIs burn **tokens**. valve meters both.
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
 | Releases | [GitHub Releases](https://github.com/shiv-eshwar/valve/releases) |
 
+## Motto
+
+> Fair, fast **request + token** limits for **any** model API you front — cloud or self-hosted, large or small.
+
+OpenAI-style `x-ratelimit-*` headers and Anthropic-style input/output token splits are **optional shapes**, not a vendor lock-in.
+
+## Who this helps
+
+| You… | valve helps by… |
+| --- | --- |
+| Run a gateway in front of vLLM / Ollama / TGI / custom models | Per-tenant RPM + TPM so one user cannot starve others |
+| Proxy a commercial API (OpenAI, Anthropic, …) | Same Check / Settle contract; map provider `usage` on settle |
+| Need unknown output tokens accounted for | Reserve estimate → settle actual (or refund on hard fail) |
+| Want polyglot enforcement | Call `valved` over HTTP/gRPC from any language |
+
 ## Features
 
-- **RPM + TPM** dual token-bucket, all-or-nothing Check
-- **ITPM + OTPM** split mode (Anthropic-shaped) via `SettleIO`
-- **Reserve → Settle → Refund** for unknown LLM output tokens
+- **RPM + TPM** dual token-bucket, all-or-nothing Check (provider-agnostic)
+- **ITPM + OTPM** split mode when you need separate input/output budgets (`SettleIO`)
+- **Reserve → Settle → Refund** for unknown generation length
 - **Fast path**: in-process deny cache + local lease chunks (opt-in)
-- **OpenAI-compatible** `x-ratelimit-*` headers
-- **Library + sidecar** (`valved` HTTP/gRPC) for any language
+- Familiar **`x-ratelimit-*` headers** (widely supported by clients/SDKs)
+- **Library + sidecar** (`valved` HTTP/gRPC)
 - **Prometheus** metrics, structured deny logs (hashed subject)
 - Redis/Valkey Lua + in-memory store for tests
 
 ## When to use / when not
 
-**Use valve when** you proxy or serve LLM APIs and need per-tenant RPM and TPM, or you want OpenAI-shaped limits in your own gateway.
+**Use valve when** you proxy or serve model APIs (LLM or SLM) and need per-tenant **request and token** budgets — self-hosted or commercial.
 
 **Do not use valve as** a full API gateway, billing ledger, tokenizer product, or strongly consistent global multi-region quota system. See [What this is not](./WHAT_THIS_IS.md#what-this-is-not).
 
@@ -57,15 +74,19 @@ docker compose up -d --build # redis + valved + prometheus (optional)
 curl -sf http://127.0.0.1:8080/healthz
 ```
 
+Share this repo: **https://github.com/shiv-eshwar/valve**
+
 ## Install
 
 ```bash
-go get github.com/shiv-eshwar/valve@v0.2.0
+go get github.com/shiv-eshwar/valve@v0.2.1
 ```
 
 Requires Go 1.24+.
 
 ## Quick example
+
+Works the same whether `model` is a cloud id or a self-hosted checkpoint name:
 
 ```go
 package main
@@ -86,13 +107,14 @@ func main() {
 	ctx := context.Background()
 	lim := limiter.New(memory.New())
 
-	body := []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"hello"}],"max_tokens":100}`)
+	// Chat-completions-shaped JSON is common (OpenAI-compatible servers, vLLM, etc.).
+	body := []byte(`{"model":"my-model","messages":[{"role":"user","content":"hello"}],"max_tokens":100}`)
 	est, err := llm.EstimateChatRequest(body, nil)
 	if err != nil {
 		panic(err)
 	}
 
-	key := api.Key{Subject: "org_123", Model: "gpt-4o"}
+	key := api.Key{Subject: "org_123", Model: "my-model"}
 	limits := api.Limits{RequestsPerMinute: 60, TokensPerMinute: 90_000}
 	d, err := lim.Check(ctx, key, limits, api.Cost{Requests: 1, Tokens: est.TotalTokens})
 	if err != nil {
@@ -106,7 +128,7 @@ func main() {
 		return
 	}
 
-	actual := int64(42)
+	actual := int64(42) // from your upstream usage / tokenizer
 	sd, err := lim.Settle(ctx, d.ReservationID, actual)
 	if err != nil {
 		panic(err)
@@ -124,7 +146,7 @@ docker compose up -d --build
 curl -s http://127.0.0.1:8080/healthz
 curl -s -X POST http://127.0.0.1:8080/v1/check \
   -H 'Content-Type: application/json' \
-  -d '{"key":{"subject":"demo","model":"gpt-4o"},"limits":{"requests_per_minute":60,"tokens_per_minute":90000},"cost":{"requests":1,"tokens":100}}'
+  -d '{"key":{"subject":"demo","model":"my-model"},"limits":{"requests_per_minute":60,"tokens_per_minute":90000},"cost":{"requests":1,"tokens":100}}'
 # Prometheus: http://127.0.0.1:9091
 ```
 
@@ -146,10 +168,21 @@ defer lim.Close(ctx)
 
 Defaults: RPM chunk `5`, TPM chunk `500`, lease TTL `2s`.
 
-## LLM proxy example
+## Examples (any upstream)
+
+| Example | Use |
+| --- | --- |
+| [`examples/openai-proxy`](./examples/openai-proxy/) | Reverse proxy for **any** OpenAI-compatible HTTP API (set `OPENAI_BASE_URL`) |
+| [`examples/vllm-proxy`](./examples/vllm-proxy/) | Same proxy pointed at local vLLM |
+| [`examples/python-client`](./examples/python-client/) | Stdlib client for `valved` |
 
 ```bash
-cd examples/openai-proxy && go run .
+# Self-hosted (vLLM / Ollama / etc.)
+cd examples/openai-proxy
+OPENAI_BASE_URL=http://127.0.0.1:8000/v1 go run .
+
+# Or any other chat-completions-compatible base URL
+OPENAI_BASE_URL=https://api.example.com/v1 go run .
 ```
 
 ## Adopter kits
@@ -159,10 +192,18 @@ cd examples/openai-proxy && go run .
 | Python HTTP client | [`examples/python-client/`](./examples/python-client/) |
 | Gin + `httpmw` demo | [`examples/gin-ratelimit/`](./examples/gin-ratelimit/) |
 | Echo + `httpmw` demo | [`examples/echo-ratelimit/`](./examples/echo-ratelimit/) |
-| vLLM via openai-proxy | [`examples/vllm-proxy/`](./examples/vllm-proxy/) |
+| vLLM / OpenAI-compatible proxy | [`examples/vllm-proxy/`](./examples/vllm-proxy/) |
 | Helm chart | [`deploy/helm/valve/`](./deploy/helm/valve/) |
 | Grafana dashboard | [`deploy/grafana/valve-dashboard.json`](./deploy/grafana/valve-dashboard.json) |
 | Sticky routing notes | [`docs/STICKY_ROUTING.md`](./docs/STICKY_ROUTING.md) |
+
+## Production checklist
+
+1. Authenticate subjects **before** Check; valve trusts the `subject` you pass.
+2. Prefer **fail-closed** (default) for abuse/cost control.
+3. With fast path, sticky-route hot orgs when possible ([docs/STICKY_ROUTING.md](./docs/STICKY_ROUTING.md)).
+4. Call `Limiter.Close` (or restart pods cleanly) so unused lease credits return.
+5. Settle with real usage from your upstream when generation finishes; Refund if the request never left the gateway.
 
 ## Develop
 

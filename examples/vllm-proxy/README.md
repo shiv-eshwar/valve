@@ -1,6 +1,6 @@
-# valve in front of vLLM
+# valve in front of vLLM (or any OpenAI-compatible server)
 
-Reuse [`examples/openai-proxy`](../openai-proxy) against a local [vLLM](https://docs.vllm.ai/) OpenAI-compatible server. No second proxy binary.
+valve is **not** OpenAI-only. This guide reuses [`examples/openai-proxy`](../openai-proxy) against a local [vLLM](https://docs.vllm.ai/) (or Ollama/TGI/LiteLLM) OpenAI-compatible HTTP API. No second proxy binary — set `OPENAI_BASE_URL` to your upstream.
 
 ## 1. Start vLLM
 
@@ -40,5 +40,5 @@ Denied requests return **429** with `x-ratelimit-*` headers from valve.
 
 ## Notes
 
-- Point `OPENAI_BASE_URL` at any OpenAI-compatible upstream (vLLM, TGI, LiteLLM, etc.).
-- For Anthropic-shaped ITPM/OTPM, use the Go library / `valved` with `input_tokens_per_minute` + `output_tokens_per_minute` (see [`docs/HTTP_API.md`](../../docs/HTTP_API.md)); the openai-proxy example remains classic TPM today.
+- `OPENAI_BASE_URL` is just the env name in the example binary — point it at **any** chat-completions-compatible base URL.
+- For separate input/output token budgets, use the Go library / `valved` with `input_tokens_per_minute` + `output_tokens_per_minute` (see [`docs/HTTP_API.md`](../../docs/HTTP_API.md)).

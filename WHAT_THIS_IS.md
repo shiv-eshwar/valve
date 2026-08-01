@@ -1,7 +1,9 @@
 # WHAT_THIS_IS
 
-Dual-dimension (RPM + TPM) distributed rate limiter for LLM and API gateways.  
+Dual-dimension (RPM + TPM) distributed rate limiter for **LLM and SLM** API gateways — hosted or self-hosted.  
 Library + sidecar, designed to sit on the hot path without becoming slower than the APIs it protects.
+
+**Motto:** fair, fast request + token limits for **any** model API you front. Vendor-shaped headers and bucket splits are optional compatibility layers, not the product identity.
 
 ---
 
@@ -10,13 +12,14 @@ Library + sidecar, designed to sit on the hot path without becoming slower than 
 This project is a **production-shaped rate limiting system** that:
 
 - Enforces **request-level** limits (RPM / RPS) and **token-level** limits (TPM) at the same time
-- Uses a **dual token-bucket** algorithm with atomic Redis/Valkey Lua updates
+- Optionally splits tokens into **input vs output** budgets (ITPM / OTPM) when your product needs that shape
+- Uses a **dual / triple token-bucket** algorithm with atomic Redis/Valkey Lua updates
 - Stays **extremely fast** via a layered path: in-process deny cache → local lease → Redis
-- Supports **reserve → execute → settle/refund** so unknown LLM output tokens are accounted correctly
-- Emits **OpenAI-compatible** `x-ratelimit-*` headers so clients and SDKs can adapt before they hit 429
+- Supports **reserve → execute → settle/refund** so unknown generation length is accounted correctly
+- Emits familiar **`x-ratelimit-*` headers** (OpenAI-compatible) so many clients/SDKs can adapt before they hit 429
 - Ships as a **Go library** and a **standalone sidecar** (`valved`) other services can call over HTTP/gRPC
 
-It is meant to be open-sourced so other developers can drop it in front of OpenAI, Anthropic, vLLM, or their own APIs and get the same metering shape providers already use.
+Drop it in front of **any** model HTTP API: commercial providers, vLLM, Ollama, TGI, LiteLLM, or your own SLM service. The limiter keys on `subject` + `model` and budgets you configure — not on a single vendor.
 
 ---
 

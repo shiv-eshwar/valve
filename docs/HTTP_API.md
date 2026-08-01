@@ -1,6 +1,7 @@
 # valve HTTP API (`valved`)
 
-Polyglot gateway contract. Responses mirror the Go `api.Decision` fields.
+Polyglot gateway contract for **any** LLM/SLM upstream. Responses mirror the Go `api.Decision` fields.  
+`model` is an opaque string (cloud model id or self-hosted name).
 
 Base URL default: `http://localhost:8080`
 

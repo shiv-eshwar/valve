@@ -12,7 +12,7 @@ Update this file whenever work lands. Do not delete remaining work — refine it
 | Field | Value |
 | --- | --- |
 | Phase | **7 — Provider-complete (complete)** |
-| Status | **Published product** — Phases 0–7 done; `v0.2.0` is the current release |
+| Status | **Published** — Phases 0–7 done; docs polish `v0.2.1` (any LLM/SLM positioning) |
 | Last updated | 2026-08-01 |
 | Next up | Community feedback; deferred only: Envoy rl_service, multi-region CRDT |
 
